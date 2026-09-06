@@ -107,3 +107,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/TestSourceDistribution
 ```
 
 Extract the delivered source into a separate directory, restore dependencies, rebuild, and check the version and all packaging inputs. See [SOURCE_DISTRIBUTION.md](SOURCE_DISTRIBUTION.md) for modifying/relinking LibRaw. Before publishing, test the extracted program ZIP on Windows without development tools. Publish the binary ZIP, matching source ZIP, and checksums together.
+
+## Automatic GitHub Releases
+
+Once the updated [Windows workflow](../.github/workflows/windows.yml) is committed and pushed, pushing a tag named `vMAJOR.MINOR.PATCH` starts the entire release process on GitHub. The tagged commit must contain the workflow, and its version in `src/Core/FAppVersion.h` must match the tag. For example, prepare the next version and push its tag:
+
+```powershell
+./tools/Set-Version.ps1 -Version 0.0.24
+git add src/Core/FAppVersion.h
+git commit -m "Set release version to 0.0.24 in the shared version header"
+git tag -a v0.0.24 -m "YUVRaw v0.0.24"
+git push origin main
+git push origin v0.0.24
+```
+
+Use your intended version instead of `0.0.24`. After the tag push, no local build or manual publishing step is needed. GitHub builds Debug and Release x64 with Visual Studio 2026, runs the existing regressions and package validation, then automatically publishes a normal Release with generated release notes and all three assets listed above. A failed build or validation prevents publication. Physical GPU/HDR and clean-machine acceptance still need the manual checks described above.
+
+The publisher uses GitHub's automatic `GITHUB_TOKEN` with job-scoped `contents: write`; no personal access token or extra repository secret is needed. Repository or organization policies must allow Actions and this permission. Branch pushes, pull requests, and manual workflow runs retain their existing build behavior and do not publish Releases. Only pushed release tags publish; prerelease suffixes such as `-rc.1` are currently unsupported.
+
+Follow progress in the repository's **Actions → Windows**, and download completed assets from **Releases**. Assets are uploaded to a draft first, then published together automatically; there is no manual draft approval. If an upload fails, use **Re-run failed jobs** on the original tag run to resume the draft. An already published Release is left unchanged. For source changes, create a new version and tag instead of moving a published tag.

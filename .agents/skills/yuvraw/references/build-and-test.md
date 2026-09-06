@@ -41,6 +41,12 @@ Visual Studio 自带的 `VC/vcpkg`。不要再把头文件、库或 DNG 测试�
 三份文件必须一起发布；缺资源、许可或来源校验失败时拒绝产包。版本与打包步骤见
 `docs/BUILDING.md`；发布前验证解压后的程序包可在无开发工具的 Windows 上运行。
 
+`.github/workflows/windows.yml` 在推送 `vMAJOR.MINOR.PATCH` tag 后自动发布 GitHub Release，
+先核对 tag 与源码版本，等待 Debug/Release 构建及现有检查全部成功，再上传三件产物并公开。
+CI 使用 runner 临时目录打包，保持 Actions 附件为平铺文件；本地默认输出路径不变。
+发布仅使用该 job 的 `contents: write` 权限；上传中断可重跑失败 job 继续草稿，已公开版本不覆盖。
+分支 push、PR 和手动运行仍只构建，不发版；配置此流程本身不需要实际打 tag 或触发 CI。
+
 公开项目文档使用英文 `*.md` 与中文 `*.zh-CN.md`，顶部互链；默认 README 与 UI 均为英文。
 `tests/TestDocumentation.ps1` 检查双语配对、相对路径和标题跳转，CI 同步执行。
 `Copy-ReleaseDocumentation.ps1` 将双语 QUICK_START 转为便携包 README，并只改写语言链接；

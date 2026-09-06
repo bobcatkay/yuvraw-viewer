@@ -7,7 +7,8 @@ permissions:
   contents: read
 concurrency:
   group: windows-${{ github.ref }}
-  cancel-in-progress: true
+  # Let a tag finish publishing even if another run targets the same tag.
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 jobs:
   build:
     runs-on: windows-2025-vs2026
@@ -22,6 +23,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Validate release tag before building
+        if: github.ref_type == 'tag'
+        run: |
+          if ($env:GITHUB_REF_NAME -cnotmatch '^v(\d+\.\d+\.\d+)$') { throw 'Expected a vMAJOR.MINOR.PATCH tag' }
+          ./build-release.ps1 -Platform x64 -ExpectedVersion $Matches[1] -DryRun
       - name: Bilingual documentation and links
         run: ./tests/TestDocumentation.ps1
       # These regressions need only MSVC and WIC, so report codec failures before
@@ -67,9 +73,10 @@ jobs:
       - name: Build and verify fixed-version Release x64
         if: matrix.configuration == 'Release'
         run: |
-          $releaseArguments = @{ Platform = 'x64' }
+          # A fixed directory keeps the downloaded artifact flat for the publisher.
+          $releaseArguments = @{ Platform = 'x64'; OutputDirectory = "$env:RUNNER_TEMP/release" }
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
-            if ($env:GITHUB_REF_NAME -notmatch '^v(\d+\.\d+\.\d+)$') { throw 'Expected a vMAJOR.MINOR.PATCH tag' }
+            if ($env:GITHUB_REF_NAME -cnotmatch '^v(\d+\.\d+\.\d+)$') { throw 'Expected a vMAJOR.MINOR.PATCH tag' }
             $releaseArguments.ExpectedVersion = $Matches[1]
           }
           ./build-release.ps1 @releaseArguments
@@ -80,6 +87,63 @@ jobs:
           name: Windows-x64-release-candidate
           if-no-files-found: error
           path: |
-            artifacts/releases/*/x64/YUVRaw-*-windows-x64.zip
-            artifacts/releases/*/x64/YUVRaw-*-source.zip
-            artifacts/releases/*/x64/YUVRaw-*-SHA256SUMS.txt
+            ${{ runner.temp }}/release/YUVRaw-*-windows-x64.zip
+            ${{ runner.temp }}/release/YUVRaw-*-source.zip
+            ${{ runner.temp }}/release/YUVRaw-*-SHA256SUMS.txt
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-24.04
+    # Only the publisher can write releases; both build configurations must pass.
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified release files from this run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: Windows-x64-release-candidate
+          path: release
+      - name: Upload assets and publish release
+        shell: bash
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo '::error::Expected a vMAJOR.MINOR.PATCH tag'
+            exit 1
+          fi
+          version="${RELEASE_TAG#v}"
+          assets=(
+            "YUVRaw-$version-windows-x64.zip"
+            "YUVRaw-$version-source.zip"
+            "YUVRaw-$version-SHA256SUMS.txt"
+          )
+          for asset in "${assets[@]}"; do
+            if [[ ! -s "$asset" ]]; then
+              echo "::error::Missing or empty release asset: $asset"
+              exit 1
+            fi
+          done
+          sha256sum --check --strict "YUVRaw-$version-SHA256SUMS.txt"
+
+          if is_draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft'); then
+            if [[ "$is_draft" != 'true' ]]; then
+              echo "::notice::Release $RELEASE_TAG is already published; keeping its assets unchanged."
+              exit 0
+            fi
+            echo "Resuming draft release $RELEASE_TAG"
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --draft \
+              --title "YUVRaw $RELEASE_TAG" --generate-notes
+          fi
+          # Upload into a draft so failures never expose an incomplete release.
+          # A rerun may replace draft assets, but never published assets.
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --verify-tag
+          release_url=$(gh release view "$RELEASE_TAG" --json url --jq '.url')
+          echo "Published [$RELEASE_TAG]($release_url) with the Windows x64 ZIP, corresponding source ZIP and SHA256 checksums." >> "$GITHUB_STEP_SUMMARY"

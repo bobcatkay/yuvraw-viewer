@@ -107,3 +107,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/TestSourceDistribution
 ```
 
 从交付源码解压副本恢复依赖并重建，核对版本与全部打包输入。LibRaw 修改/重链接步骤见 [SOURCE_DISTRIBUTION.md](SOURCE_DISTRIBUTION.zh-CN.md)。发布前在未安装开发工具的 Windows 上测试解压后的程序包，并同时提供二进制 ZIP、匹配源码 ZIP 和校验文件。
+
+## GitHub 自动发布
+
+将更新后的 [Windows 工作流](../.github/workflows/windows.yml) 提交并推送后，推送 `v主版本.次版本.修订号` 格式的 tag，即可在 GitHub 上自动完成发版。tag 指向的提交必须包含该工作流，且 `src/Core/FAppVersion.h` 中的版本须与 tag 一致。例如，准备下一个版本并推送 tag：
+
+```powershell
+./tools/Set-Version.ps1 -Version 0.0.24
+git add src/Core/FAppVersion.h
+git commit -m "Set release version to 0.0.24 in the shared version header"
+git tag -a v0.0.24 -m "YUVRaw v0.0.24"
+git push origin main
+git push origin v0.0.24
+```
+
+请将 `0.0.24` 换成待发布版本。tag 推送后，无需本地编译或手动发布：GitHub 使用 Visual Studio 2026 构建 Debug 和 Release x64，执行现有回归测试及发行包校验，然后自动生成发布说明并发布正式 Release，附上前述三份文件。构建或校验失败时不会发布。实际 GPU/HDR 与无开发环境机器的验收仍按前文手动完成。
+
+发布任务使用 GitHub 自动提供的 `GITHUB_TOKEN`，并仅为该任务声明 `contents: write`；无需个人访问令牌或额外仓库 Secret。仓库或组织策略须允许 Actions 及该权限。普通分支 push、PR 和手动运行工作流保持原有构建行为，不会发布 Release；只有推送版本 tag 才会发布，暂不支持 `-rc.1` 等预发布后缀。
+
+在仓库 **Actions → Windows** 查看进度，完成后到 **Releases** 下载。附件先上传到草稿，齐全后自动公开，无需人工确认草稿。上传失败时，在原 tag 的运行记录中选择 **Re-run failed jobs** 可继续完成草稿；已公开的 Release 不会被覆盖。若需要修改源码，请使用新版本和新 tag，不要移动已发布的 tag。
