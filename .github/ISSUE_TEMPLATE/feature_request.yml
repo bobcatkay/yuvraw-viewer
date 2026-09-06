@@ -1,0 +1,25 @@
+name: Feature request (English)
+description: Describe a concrete use case and verifiable expected behavior.
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: "[简体中文](https://github.com/bobcatkay/yuvraw-viewer/issues/new?template=feature_request.zh-CN.yml)"
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Why is the current workflow insufficient? Which formats, parameters, or steps are involved?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Desired behavior and acceptance criteria
+      description: Which public synthetic inputs or numerical results could verify it?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives tried (optional)

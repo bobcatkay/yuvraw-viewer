@@ -1,0 +1,85 @@
+name: Windows
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Bilingual documentation and links
+        run: ./tests/TestDocumentation.ps1
+      # These regressions need only MSVC and WIC, so report codec failures before
+      # the slower third-party dependency build.
+      - name: WIC codecs, WebP encoding and export regressions
+        if: matrix.configuration == 'Debug'
+        run: ./tests/run_tests.ps1 -SuiteNames TestWicImageLoader,TestWebpEncoder,TestImageExporter
+      - name: Bootstrap pinned vcpkg
+        run: |
+          $baseline = (Get-Content -Raw vcpkg.json | ConvertFrom-Json).'builtin-baseline'
+          git clone https://github.com/microsoft/vcpkg.git "$env:RUNNER_TEMP/vcpkg"
+          if ($LASTEXITCODE) { throw 'vcpkg clone failed' }
+          git -C "$env:RUNNER_TEMP/vcpkg" checkout --detach $baseline
+          if ($LASTEXITCODE) { throw 'vcpkg checkout failed' }
+          & "$env:RUNNER_TEMP/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE) { throw 'vcpkg bootstrap failed' }
+          "VCPKG_ROOT=$env:RUNNER_TEMP/vcpkg" >> $env:GITHUB_ENV
+      - name: Build Debug x64
+        if: matrix.configuration == 'Debug'
+        run: |
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $msbuild = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+          & $msbuild YUVRaw.sln /t:Rebuild /p:Configuration=Debug /p:Platform=x64 /m:1 /nodeReuse:false /nologo /v:minimal
+          if ($LASTEXITCODE) { throw 'Debug build failed' }
+      - name: CPU and generated DNG regressions
+        if: matrix.configuration == 'Debug'
+        run: ./tests/run_tests.ps1
+      - name: Bilingual UI, fallback font and layout
+        if: matrix.configuration == 'Debug'
+        run: ./tests/run_ui_resource_tests.ps1
+      - name: Static analysis for loaders
+        if: matrix.configuration == 'Debug'
+        run: ./tests/run_tests.ps1 -Analyze -SuiteNames TestWicImageLoader,TestDngImageLoader,TestRawImageLoader
+      - name: AddressSanitizer for loaders
+        if: matrix.configuration == 'Debug'
+        run: ./tests/run_tests.ps1 -EnableAddressSanitizer -SuiteNames TestWicImageLoader,TestDngImageLoader,TestRawImageLoader
+      - name: Source snapshot rollback and local edit protection
+        if: matrix.configuration == 'Debug'
+        run: ./tests/TestSourceSnapshot.ps1
+      - name: Release package rejection regressions
+        if: matrix.configuration == 'Debug'
+        run: ./tests/TestReleasePackageFailures.ps1
+      - name: Build and verify fixed-version Release x64
+        if: matrix.configuration == 'Release'
+        run: |
+          $releaseArguments = @{ Platform = 'x64' }
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            if ($env:GITHUB_REF_NAME -notmatch '^v(\d+\.\d+\.\d+)$') { throw 'Expected a vMAJOR.MINOR.PATCH tag' }
+            $releaseArguments.ExpectedVersion = $Matches[1]
+          }
+          ./build-release.ps1 @releaseArguments
+      - name: Upload reviewed release files
+        if: matrix.configuration == 'Release'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Windows-x64-release-candidate
+          if-no-files-found: error
+          path: |
+            artifacts/releases/*/x64/YUVRaw-*-windows-x64.zip
+            artifacts/releases/*/x64/YUVRaw-*-source.zip
+            artifacts/releases/*/x64/YUVRaw-*-SHA256SUMS.txt

@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{062e78ce-2fb7-4900-97e7-3f035741e495}</ProjectGuid>
+    <RootNamespace>YUVRaw</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="'$(YUVRawImportUserProperties)'=='true' and exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="'$(YUVRawImportUserProperties)'=='true' and exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="'$(YUVRawImportUserProperties)'=='true' and exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="'$(YUVRawImportUserProperties)'=='true' and exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros">
+    <VcpkgRoot Condition="'$(VcpkgRoot)'=='' and '$(VCPKG_ROOT)'!=''">$(VCPKG_ROOT)</VcpkgRoot>
+    <VcpkgRoot Condition="'$(VcpkgRoot)'=='' and Exists('$(ProjectDir)..\vcpkg\vcpkg.exe')">$(ProjectDir)..\vcpkg</VcpkgRoot>
+    <VcpkgRoot Condition="'$(VcpkgRoot)'==''">$(VCInstallDir)vcpkg</VcpkgRoot>
+    <YUVRawDependenciesDir>$(ProjectDir)vcpkg_installed\</YUVRawDependenciesDir>
+    <!-- 依赖由下方自定义 static-md triplet 显式链接，避免全局集成再混入另一 triplet 的全部库。 -->
+    <VcpkgEnabled>false</VcpkgEnabled>
+    <LibRawTriplet Condition="'$(Platform)'=='x64'">x64-windows-static-md</LibRawTriplet>
+    <LibRawTriplet Condition="'$(Platform)'=='Win32'">x86-windows-static-md</LibRawTriplet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IntDir>$(SolutionDir)intermediate\$(Configuration)\$(Platform)\</IntDir>
+    <IncludePath>$(SolutionDir)src;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IntDir>$(SolutionDir)intermediate\$(Configuration)\$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <IncludePath>$(SolutionDir)src;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IntDir>$(SolutionDir)intermediate\$(Configuration)\$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <IncludePath>$(SolutionDir)src;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IntDir>$(SolutionDir)intermediate\$(Configuration)\$(Platform)\</IntDir>
+    <IncludePath>$(SolutionDir)src;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;LIBRAW_NODLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(SolutionDir)libs\Glad\include;$(SolutionDir)libs\GLFW\include;$(SolutionDir)libs\ImGui;$(YUVRawDependenciesDir)$(LibRawTriplet)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(YUVRawDependenciesDir)$(LibRawTriplet)\debug\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>raw_rd.lib;lcms2.lib;zsd.lib;jpeg.lib;jasperd.lib;ws2_32.lib;opengl32.lib;windowscodecs.lib;ole32.lib;shell32.lib;d3d11.lib;dxgi.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;LIBRAW_NODLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(SolutionDir)libs\Glad\include;$(SolutionDir)libs\GLFW\include;$(SolutionDir)libs\ImGui;$(YUVRawDependenciesDir)$(LibRawTriplet)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(YUVRawDependenciesDir)$(LibRawTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>raw_r.lib;lcms2.lib;zs.lib;jpeg.lib;jasper.lib;ws2_32.lib;opengl32.lib;windowscodecs.lib;ole32.lib;shell32.lib;d3d11.lib;dxgi.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;LIBRAW_NODLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(SolutionDir)libs\Glad\include;$(SolutionDir)libs\GLFW\include;$(SolutionDir)libs\ImGui;$(YUVRawDependenciesDir)$(LibRawTriplet)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(YUVRawDependenciesDir)$(LibRawTriplet)\debug\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>raw_rd.lib;lcms2.lib;zsd.lib;jpeg.lib;jasperd.lib;ws2_32.lib;opengl32.lib;windowscodecs.lib;ole32.lib;shell32.lib;d3d11.lib;dxgi.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;LIBRAW_NODLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(SolutionDir)libs\Glad\include;$(SolutionDir)libs\GLFW\include;$(SolutionDir)libs\ImGui;$(YUVRawDependenciesDir)$(LibRawTriplet)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(YUVRawDependenciesDir)$(LibRawTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>raw_r.lib;lcms2.lib;zs.lib;jpeg.lib;jasper.lib;ws2_32.lib;opengl32.lib;windowscodecs.lib;ole32.lib;shell32.lib;d3d11.lib;dxgi.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup>
+    <PostBuildEvent>
+      <Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\Copy-ThirdPartyNotices.ps1" -InstallRoot "$(YUVRawDependenciesDir)." -Triplet "$(LibRawTriplet)" -OutputDirectory "$(OutDir)."
+if errorlevel 1 exit /b 1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\Copy-RuntimeResources.ps1" -OutputDirectory "$(OutDir)."</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="Application.cpp" />
+    <ClCompile Include="src\Core\FApplication.cpp" />
+    <ClCompile Include="src\Core\FLogger.cpp" />
+    <ClCompile Include="src\Core\FWindow.cpp" />
+    <ClCompile Include="src\Core\FRenderer.cpp" />
+    <ClCompile Include="src\Core\FHdrDisplay.cpp" />
+    <ClCompile Include="src\Core\FHdrPresenter.cpp" />
+    <ClCompile Include="src\Core\FMainDockSpace.cpp" />
+    <ClCompile Include="src\Core\FImageConfigCache.cpp" />
+    <ClCompile Include="src\Core\FDirectoryImagePropertyHistory.cpp" />
+    <ClCompile Include="src\Core\FImageDocument.cpp" />
+    <ClCompile Include="src\Core\FCommandLine.cpp" />
+    <ClCompile Include="src\Core\FAsyncJob.cpp" />
+    <ClCompile Include="src\Core\FAsyncImageLoader.cpp" />
+    <ClCompile Include="src\Core\FFileDialog.cpp" />
+    <ClCompile Include="src\Core\FUserSettings.cpp" />
+    <ClCompile Include="src\Image\FImageCompare.cpp" />
+    <ClCompile Include="src\Image\FImageExporter.cpp" />
+    <ClCompile Include="src\Image\FWebpEncoder.cpp" />
+    <ClCompile Include="src\UI\FExportPanel.cpp" />
+    <ClCompile Include="src\UI\FHistogramPanel.cpp" />
+    <ClCompile Include="src\UI\FComparePanel.cpp" />
+    <ClCompile Include="src\Image\FImageData.cpp" />
+    <ClCompile Include="src\Image\FImageFormatDesc.cpp" />
+    <ClCompile Include="src\Image\FResolutionGuess.cpp" />
+    <ClCompile Include="src\Image\FImageLoader.cpp" />
+    <ClCompile Include="src\Image\FImageSampler.cpp" />
+    <ClCompile Include="src\Image\FDngImageLoader.cpp" />
+    <ClCompile Include="src\Image\FRawImageLoader.cpp" />
+    <ClCompile Include="src\Image\FWicImageLoader.cpp" />
+    <ClCompile Include="src\UI\FMenuBar.cpp" />
+    <ClCompile Include="src\UI\FFileExplorer.cpp" />
+    <ClCompile Include="src\UI\FImageViewer.cpp" />
+    <ClCompile Include="src\UI\FPropertyPanel.cpp" />
+    <ClCompile Include="src\UI\FToast.cpp" />
+    <ClCompile Include="src\UI\FThemeColorPicker.cpp" />
+    <ClCompile Include="src\UI\FUiIcons.cpp" />
+    <ClCompile Include="src\UI\FUiTheme.cpp" />
+    <ClCompile Include="src\GL\FTexture.cpp" />
+    <ClCompile Include="src\GL\FShader.cpp" />
+    <ClCompile Include="src\GL\FShaderManager.cpp" />
+    <ClCompile Include="src\GL\FTextureData.cpp" />
+    <ClCompile Include="src\Util.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\Core\FApplication.h" />
+    <ClInclude Include="src\Core\FAppVersion.h" />
+    <ClInclude Include="src\Core\FThirdPartyNotices.h" />
+    <ClInclude Include="src\Core\FLogger.h" />
+    <ClInclude Include="src\Core\FWindow.h" />
+    <ClInclude Include="src\Core\FWindowPlacement.h" />
+    <ClInclude Include="src\Core\FRenderer.h" />
+    <ClInclude Include="src\Core\FHdrDisplay.h" />
+    <ClInclude Include="src\Core\FHdrPresenter.h" />
+    <ClInclude Include="src\Core\FMainDockSpace.h" />
+    <ClInclude Include="src\Core\FImageConfigCache.h" />
+    <ClInclude Include="src\Core\FDirectoryImagePropertyHistory.h" />
+    <ClInclude Include="src\Core\FImageDocument.h" />
+    <ClInclude Include="src\Core\FCommandLine.h" />
+    <ClInclude Include="src\Core\FAsyncJob.h" />
+    <ClInclude Include="src\Core\FAsyncImageLoader.h" />
+    <ClInclude Include="src\Core\FFileDialog.h" />
+    <ClInclude Include="src\Core\FUserSettings.h" />
+    <ClInclude Include="src\Core\FLocalization.h" />
+    <ClInclude Include="src\Core\FUiText.inl" />
+    <ClInclude Include="src\Image\FDisplaySettings.h" />
+    <ClInclude Include="src\Image\FImageCompare.h" />
+    <ClInclude Include="src\Image\FImageExporter.h" />
+    <ClInclude Include="src\Image\FWebpEncoder.h" />
+    <ClInclude Include="src\UI\FExportPanel.h" />
+    <ClInclude Include="src\UI\FHistogramPanel.h" />
+    <ClInclude Include="src\UI\FComparePanel.h" />
+    <ClInclude Include="src\Image\FImageData.h" />
+    <ClInclude Include="src\Image\FImageFormat.h" />
+    <ClInclude Include="src\Image\FImageFormatDesc.h" />
+    <ClInclude Include="src\Image\FImageLimits.h" />
+    <ClInclude Include="src\Image\FResolutionGuess.h" />
+    <ClInclude Include="src\Image\FImageLoader.h" />
+    <ClInclude Include="src\Image\FImageLoadParams.h" />
+    <ClInclude Include="src\Image\FImageSampler.h" />
+    <ClInclude Include="src\Image\FColorTransform.h" />
+    <ClInclude Include="src\Image\FDngImageLoader.h" />
+    <ClInclude Include="src\Image\FRawImageLoader.h" />
+    <ClInclude Include="src\Image\FWicImageLoader.h" />
+    <ClInclude Include="src\UI\FMenuBar.h" />
+    <ClInclude Include="src\UI\FFileExplorer.h" />
+    <ClInclude Include="src\UI\FImageViewer.h" />
+    <ClInclude Include="src\UI\FPropertyPanel.h" />
+    <ClInclude Include="src\UI\FToast.h" />
+    <ClInclude Include="src\UI\FThemeColorPicker.h" />
+    <ClInclude Include="src\UI\FUiIcons.h" />
+    <ClInclude Include="src\UI\FUiScale.h" />
+    <ClInclude Include="src\UI\FUiFont.h" />
+    <ClInclude Include="src\UI\FUiLayout.h" />
+    <ClInclude Include="src\UI\FUiTheme.h" />
+    <ClInclude Include="src\GL\FTexture.h" />
+    <ClInclude Include="src\GL\FShader.h" />
+    <ClInclude Include="src\GL\FShaderManager.h" />
+    <ClInclude Include="src\GL\FShaders.h" />
+    <ClInclude Include="src\GL\FTextureData.h" />
+    <ClInclude Include="src\Util.h" />
+    <ClInclude Include="src\Core\FUiResources.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="build-release.ps1" />
+    <None Include="LICENSE" />
+    <None Include="licenses\LGPL-2.1.txt" />
+    <None Include="docs\SOURCE_DISTRIBUTION.md" />
+    <None Include="third-party\sources.lock.json" />
+    <None Include="tools\Copy-ThirdPartyNotices.ps1" />
+    <None Include="tools\Export-SourceBundle.ps1" />
+    <None Include="vcpkg.json" />
+    <None Include="vcpkg-triplets\x64-windows-static-md.cmake" />
+    <None Include="vcpkg-triplets\x86-windows-static-md.cmake" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="resources\YUVRaw.rc" />
+    <Image Include="resources\AppIcon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="libs\Glad\Glad.vcxproj">
+      <Project>{48c51527-e096-4217-bf5e-dfda581cf52f}</Project>
+    </ProjectReference>
+    <ProjectReference Include="libs\GLFW\GLFW.vcxproj">
+      <Project>{0f61793b-05eb-4814-bd87-9af3edae208c}</Project>
+    </ProjectReference>
+    <ProjectReference Include="libs\ImGui\ImGui.vcxproj">
+      <Project>{e8529868-f4cb-4068-a402-04583cdd150e}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="RestoreYUVRawDependencies" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)'!='true'">
+    <Error Condition="!Exists('$(VcpkgRoot)\vcpkg.exe')" Text="找不到 vcpkg.exe。请在 Visual Studio Installer 中安装 vcpkg 组件，或用 VCPKG_ROOT 环境变量 / VcpkgRoot MSBuild 属性指定 vcpkg 目录。" />
+    <!-- vcpkg 会在镜像失败后重试；以进程退出码判断结果，避免把已恢复的下载错误判为构建失败。 -->
+    <Exec IgnoreStandardErrorWarningFormat="true" UseUtf8Encoding="Always" Command="chcp 65001 &gt; nul &amp; &quot;$(VcpkgRoot)\vcpkg.exe&quot; install --triplet=$(LibRawTriplet) --x-manifest-root=&quot;$(ProjectDir).&quot; --x-install-root=&quot;$(YUVRawDependenciesDir).&quot; --overlay-triplets=&quot;$(ProjectDir)vcpkg-triplets&quot; --x-wait-for-lock --disable-metrics" />
+  </Target>
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

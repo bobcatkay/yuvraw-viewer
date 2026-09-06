@@ -1,0 +1,120 @@
+LibRaw 0.22.2 internal component notices
+
+The BSD blocks below are copied verbatim from the indicated upstream source
+files in the pinned LibRaw 0.22.2 source archive. The Adobe section separately
+identifies the basis for its standard MIT text. LibRaw's selected LGPL-2.1-only
+license does not remove these component terms. Original source files and
+COPYRIGHT remain present in the corresponding source distribution.
+
+DCB demosaicing and FBDD denoising
+Source: https://github.com/LibRaw/LibRaw/blob/0.22.2/src/demosaic/dcb_demosaic.cpp
+
+/*
+ *    Copyright (C) 2010,  Jacek Gozdz (cuniek@kft.umcs.lublin.pl)
+ *
+ *    This code is licensed under a (3-clause) BSD license as follows :
+ *
+ *    Redistribution and use in source and binary forms, with or without
+ *    modification, are permitted provided that the following
+ *	  conditions are met:
+ *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *		disclaimer in the documentation and/or other materials provided
+ * 	    with the distribution.
+ *    * Neither the name of the author nor the names of its
+ *      contributors may be used to endorse or promote products
+ * 		derived from this software without specific prior written permission.
+ *
+ *    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+ * 	  FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+ * 	  THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * 	  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * 	  (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * 	  SERVICES; LOSS OF USE,
+ *    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * 	  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ *	  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+ * 	  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
+ *    OF SUCH DAMAGE.
+ */
+
+// DCB demosaicing by Jacek Gozdz (cuniek@kft.umcs.lublin.pl)
+
+// FBDD denoising by Jacek Gozdz (cuniek@kft.umcs.lublin.pl) and
+// Luis Sanz Rodríguez (luis.sanz.rodriguez@gmail.com)
+
+// last modification: 11.07.2010
+
+
+X3F file access library (source retained; USE_X3FTOOLS is not enabled in this build)
+Source: https://github.com/LibRaw/LibRaw/blob/0.22.2/src/x3f/x3f_utils_patched.cpp
+Also retained in src/x3f/x3f_parse_process.cpp and internal/x3f_tools.h.
+/* Library for accessing X3F Files
+----------------------------------------------------------------
+BSD-style License
+----------------------------------------------------------------
+
+* Copyright (c) 2010, Roland Karlsson (roland@proxel.se)
+* All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*     * Redistributions of source code must retain the above copyright
+*       notice, this list of conditions and the following disclaimer.
+*     * Redistributions in binary form must reproduce the above copyright
+*       notice, this list of conditions and the following disclaimer in the
+*       documentation and/or other materials provided with the distribution.
+*     * Neither the name of the organization nor the
+*       names of its contributors may be used to endorse or promote products
+*       derived from this software without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY ROLAND KARLSSON ''AS IS'' AND ANY
+* EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL ROLAND KARLSSON BE LIABLE FOR ANY
+* DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+* ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
+
+Adobe DNG SDK 1.4 fragments incorporated by LibRaw
+
+Basis: https://github.com/LibRaw/LibRaw/blob/0.22.2/COPYRIGHT
+Upstream identifies these fragments as MIT-licensed and attributes them to:
+Copyright (c) 2005 Adobe Systems Incorporated
+
+The standard MIT text below is supplied according to the license identifier
+in LibRaw COPYRIGHT. It is sourced from SPDX, with the copyright placeholder
+filled from that upstream attribution; it was NOT extracted from an Adobe
+source file. It is not the separate Adobe DNG SDK license agreement. YUVRaw
+does not bundle or enable the separate Adobe DNG SDK.
+Standard text source: https://spdx.org/licenses/MIT.html
+Text retrieved: 2026-09-06
+
+MIT License
+
+Copyright (c) 2005 Adobe Systems Incorporated
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.

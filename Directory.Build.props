@@ -1,0 +1,7 @@
+<Project>
+  <!-- Keep dependency restoration and links independent of global vcpkg integration. -->
+  <PropertyGroup>
+    <VcpkgEnabled>false</VcpkgEnabled>
+    <VcpkgEnableManifest>false</VcpkgEnableManifest>
+  </PropertyGroup>
+</Project>

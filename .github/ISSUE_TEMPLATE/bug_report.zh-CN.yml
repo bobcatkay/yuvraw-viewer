@@ -1,0 +1,41 @@
+name: 问题报告（简体中文）
+description: 报告可复现的功能问题；安全漏洞先阅读 SECURITY.md。
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "[English](https://github.com/bobcatkay/yuvraw-viewer/issues/new?template=bug_report.yml)"
+  - type: markdown
+    attributes:
+      value: "请不要上传私有原图、完整日志目录或敏感路径。安全问题请先阅读 SECURITY.md。优先提供合成最小复现。"
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本或提交
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 运行环境
+      description: Windows 版本、x64、显卡与驱动；涉及 HDR 时附显示器、Windows HDR 状态；涉及可选格式时附 WIC codec 情况。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤与实际结果
+      description: 涉及裸图请填写格式、宽高、字节 stride、位深/对齐、字节序、矩阵/range/transfer；无需提供私有原图。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏证据（可选）
+      description: 最小日志片段、截图或合成样例生成器。移除用户名、完整路径、相机序列号和私有图像元数据。

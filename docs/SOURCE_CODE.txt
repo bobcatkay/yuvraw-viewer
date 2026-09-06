@@ -1,0 +1,19 @@
+YUVRaw {{version}} - Corresponding source
+Download {{sourceName}} from the same release location as {{binaryName}}.
+The source includes this application, dependency sources, build recipes and patches.
+See SOURCE_DISTRIBUTION.md for build and relink instructions.
+Keep binary and matching source available together. Verify both using {{checksumsName}}.
+
+Windows runtime prerequisite
+Install the Microsoft Visual C++ v14 Redistributable for {{platform}}.
+https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist
+
+YUVRaw {{version}} - 对应源码
+请在 {{binaryName}} 的同一发行位置下载 {{sourceName}}。
+源码包含应用、依赖源码、构建配方及补丁。
+构建与重链接说明见 SOURCE_DISTRIBUTION.zh-CN.md。
+二进制与匹配源码须共同提供，并使用 {{checksumsName}} 校验。
+
+Windows 运行前提
+安装适用于 {{platform}} 的 Microsoft Visual C++ v14 Redistributable。
+https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist

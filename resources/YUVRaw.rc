@@ -1,0 +1,36 @@
+#pragma code_page(65001)
+#include <winver.h>
+#include "../src/Core/FAppVersion.h"
+
+// GLFW 会在 Windows 创建窗口时自动查找这个具名图标资源。
+GLFW_ICON ICON "AppIcon.ico"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION YUVRAW_VERSION_MAJOR,YUVRAW_VERSION_MINOR,YUVRAW_VERSION_PATCH,0
+ PRODUCTVERSION YUVRAW_VERSION_MAJOR,YUVRAW_VERSION_MINOR,YUVRAW_VERSION_PATCH,0
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0
+#endif
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription", "YUVRaw image viewer\0"
+            VALUE "FileVersion", YUVRAW_VERSION_STRING "\0"
+            VALUE "InternalName", "YUVRaw\0"
+            VALUE "OriginalFilename", "YUVRaw.exe\0"
+            VALUE "ProductName", "YUVRaw\0"
+            VALUE "ProductVersion", YUVRAW_VERSION_STRING "\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "normalization": "UTF-8 text with CRLF converted to LF; no other whitespace changes",
+  "imgui": {
+    "repository": "https://github.com/ocornut/imgui",
+    "commit": "f4d9359095eff3eb03f685921edc1cf0e37b1687",
+    "version": "1.92.0 WIP",
+    "versionNumber": 19193,
+    "localChanges": "imconfig.h has one additional blank line at EOF; no behavior changes",
+    "patch": "third-party/imgui-local.patch",
+    "files": [
+      {
+        "path": "libs/ImGui/LICENSE.txt",
+        "sha256NormalizedLf": "c80c5789748d955c4a650562baa0d750494e2c7128c2ca66aaebe2e3c4e198bf",
+        "upstreamGitBlob": "00ae473abe62bf1c53b333613bd9e05aa72e2ca0"
+      },
+      {
+        "path": "libs/ImGui/backends/imgui_impl_glfw.h",
+        "sha256NormalizedLf": "c9c66d372a7e2a211071e95c28e75e7d18e35c861affbd0c2b052411069ce040",
+        "upstreamGitBlob": "fb6f3118a24cbfaffc03916765b154711c0641bf"
+      },
+      {
+        "path": "libs/ImGui/backends/imgui_impl_opengl3.h",
+        "sha256NormalizedLf": "8b41f2d0d8d388ef9aee9c7cb73171ecae202118be3217b80cc1d6743012daca",
+        "upstreamGitBlob": "d56213044861e7fc9b2e9d91f38c41951392bd58"
+      },
+      {
+        "path": "libs/ImGui/backends/imgui_impl_opengl3_loader.h",
+        "sha256NormalizedLf": "9d17b1679dc876e0ca693631030e70656c372c808c6767644c3b545834483e24",
+        "upstreamGitBlob": "d6ffa5a2d427ca9bf2d512162c97cdbb931b8097"
+      },
+      {
+        "path": "libs/ImGui/imconfig.h",
+        "sha256NormalizedLf": "c5c4ae77bf102cc86deaf07c71e9077b0e0dc66716bc7c8fa33213ffe599738b",
+        "upstreamGitBlob": "a1e29e849bc8c6125a0c567fa6cb528a293025cb"
+      },
+      {
+        "path": "libs/ImGui/imgui.h",
+        "sha256NormalizedLf": "bfc5f3e2f734e188070725c70cf626618fa117eb638b8ea4e4a0f172380592cc",
+        "upstreamGitBlob": "492caf78619da50293400a76a099b320669a28e9"
+      },
+      {
+        "path": "libs/ImGui/imgui_internal.h",
+        "sha256NormalizedLf": "941fa186b01b6edf0fdd7e816917c634cc6b28dad3654a24ba2c09713434573e",
+        "upstreamGitBlob": "ae6972f63adfa03d08948e4b8b7f56a78202fbcf"
+      },
+      {
+        "path": "libs/ImGui/imstb_rectpack.h",
+        "sha256NormalizedLf": "2efa3d5f7d003c19743b15155dad9f46d9f9fc783a18893d703b431d3c990972",
+        "upstreamGitBlob": "f6917e7a6e56a03dcee169bf4e08c32611b761c9"
+      },
+      {
+        "path": "libs/ImGui/imstb_textedit.h",
+        "sha256NormalizedLf": "77010e494caf72c178b573569612aec409d24380409676325a31d02de0ec64b7",
+        "upstreamGitBlob": "b7a761c85381993be0f4cd78539f277c06eb407e"
+      },
+      {
+        "path": "libs/ImGui/imstb_truetype.h",
+        "sha256NormalizedLf": "87f08919ae8e7223451d0e9d06b62829075d3e920c9e6ad436db9d7e7427ffce",
+        "upstreamGitBlob": "976f09cb92780b0d0db6fdfa3b2714df2567b320"
+      },
+      {
+        "path": "libs/ImGui/backends/imgui_impl_glfw.cpp",
+        "sha256NormalizedLf": "d10e292d4029e189a87d5a22e0da71559b6893346d1577953d4c820b6adc1ff8",
+        "upstreamGitBlob": "0d4c8759fba224d7ec41567e34790e0b52c1b11e"
+      },
+      {
+        "path": "libs/ImGui/backends/imgui_impl_opengl3.cpp",
+        "sha256NormalizedLf": "49dbceecb8dc31a87847469aae6986a200bbec2d2b5089bd1a6f4fad1dc1d943",
+        "upstreamGitBlob": "2ed1c541382c071a8d09b3a8d85b81b2fafc9924"
+      },
+      {
+        "path": "libs/ImGui/imgui.cpp",
+        "sha256NormalizedLf": "d06cf1b76adf094c688712531f3db8bc5d3bb830b366f35dfd678371a881b8ef",
+        "upstreamGitBlob": "d516cd36b977362b2c737b3c019e54b6781e7c3f"
+      },
+      {
+        "path": "libs/ImGui/imgui_demo.cpp",
+        "sha256NormalizedLf": "f9b97d05545b423ad4423a517d67fbb8be52799bbb7a07c55c0d2090f1e17c59",
+        "upstreamGitBlob": "e3a4c37b9754f050f4bbb7e38045cceabe4042ff"
+      },
+      {
+        "path": "libs/ImGui/imgui_draw.cpp",
+        "sha256NormalizedLf": "d84029990fdeb99571555ca8b8360dcd17ab378fb8dc934e0d003983c3eabf5c",
+        "upstreamGitBlob": "f53e0b22ac8d4c969f8ba6366427e12f880d750a"
+      },
+      {
+        "path": "libs/ImGui/imgui_tables.cpp",
+        "sha256NormalizedLf": "2b785cd7dcbd4ee40403255e79c829558deeaab4b80b31e84696421e3faa907c",
+        "upstreamGitBlob": "b8b869301c474a90552a95f9ed7c922385f8a66a"
+      },
+      {
+        "path": "libs/ImGui/imgui_widgets.cpp",
+        "sha256NormalizedLf": "3abdc5ff01b9b3122510de27b35dfa8bcf1ec09aa21fd6e496a9abf6f360d975",
+        "upstreamGitBlob": "6db2cd595215c193f895485c9927143fc8b4ad98"
+      }
+    ]
+  },
+  "glad": {
+    "repository": "https://github.com/Dav1dde/glad",
+    "generatorVersion": "0.1.36",
+    "generatedAt": "2024-08-16T16:21:36",
+    "generationTimezone": "not recorded",
+    "api": "gl=4.6,gles2=3.2",
+    "profile": "compatibility",
+    "specification": "gl",
+    "generator": "c",
+    "loader": true,
+    "localFiles": false,
+    "omitKhrplatform": false,
+    "reproducible": false,
+    "sourceRegistryRevision": "not recorded; distribute the supplied generated files",
+    "extensions": [
+      "GL_EXT_YUV_target",
+      "GL_OES_EGL_image",
+      "GL_OES_EGL_image_external",
+      "GL_OES_EGL_image_external_essl3"
+    ],
+    "files": [
+      {
+        "path": "libs/Glad/include/glad/glad.h",
+        "sha256NormalizedLf": "a69b17ea4d6a33e3358c97000e279ec4c8f1d58abe7256704a6659f607abf78d"
+      },
+      {
+        "path": "libs/Glad/src/glad.c",
+        "sha256NormalizedLf": "b474a42e829571402de6cbde08b06fbc30ea685793db106562772f946a2060b1"
+      },
+      {
+        "path": "libs/Glad/include/KHR/khrplatform.h",
+        "sha256NormalizedLf": "7b1e01aaa7ad8f6fc34b5c7bdf79ebf5189bb09e2c4d2e79fc5d350623d11e83"
+      }
+    ]
+  }
+}

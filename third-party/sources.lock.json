@@ -1,0 +1,496 @@
+{
+    "schemaVersion":  1,
+    "vcpkgBaseline":  "7ff71c68261ecf3b60cdb8772f2e6759ee0a71b1",
+    "ports":  [
+                  {
+                      "name":  "libraw",
+                      "version":  "0.22.2",
+                      "portVersion":  0,
+                      "tree":  "fba030a7be23a0356eb36ed721db8d55b0b64d93",
+                      "files":  [
+                                    {
+                                        "path":  "dependencies.patch",
+                                        "sha256":  "fb82796be279b13bdcbfb2f3df41eb3029d1377b378add17db8f9774b2203d42"
+                                    },
+                                    {
+                                        "path":  "fix-install.patch",
+                                        "sha256":  "89f73133b90cf640e0cc7d785e5b5831053e5b48f66dd5be167790f51ae7492c"
+                                    },
+                                    {
+                                        "path":  "portfile.cmake",
+                                        "sha256":  "bfab9a5f5950077b5212e4c367b45197b29ea9879ea411f34c90d118d7586b96"
+                                    },
+                                    {
+                                        "path":  "usage",
+                                        "sha256":  "230e491625029f33a1b23d1e3e3e02d4146232d319165e0dafdf29ab80399332"
+                                    },
+                                    {
+                                        "path":  "vcpkg-cmake-wrapper.cmake",
+                                        "sha256":  "35e407b398fdb9c80f345a87a4cbba455978aeec54ca863a8077611f221c24bb"
+                                    },
+                                    {
+                                        "path":  "vcpkg.json",
+                                        "sha256":  "e7f04ff2af6c4333904eef9c23807b4bfbe573e7175bd14a691ae29c60dd8b0f"
+                                    }
+                                ],
+                      "resources":  [
+                                        {
+                                            "file":  "LibRaw-LibRaw-0.22.2.tar.gz",
+                                            "url":  "https://github.com/LibRaw/LibRaw/archive/0.22.2.tar.gz",
+                                            "sha512":  "24313fbdc0f91432cf1de9fd1a7af56cc01c314760194a32fed8e7f5b991ff35e34fe04606e40ed86b3982f88e141c54b528d33631b420b71525abb06c95f5f4"
+                                        },
+                                        {
+                                            "file":  "LibRaw-LibRaw-cmake-eb98e4325aef2ce85d2eb031c2ff18640ca616d3.tar.gz",
+                                            "url":  "https://github.com/LibRaw/LibRaw-cmake/archive/eb98e4325aef2ce85d2eb031c2ff18640ca616d3.tar.gz",
+                                            "sha512":  "63e68a4d30286ec3aa97168d46b7a1199268099ae27b61abcc92e93ec30e48d364086227983a1d724415e5f4da44d905422f30192453b95f31040e5f8469c3f9"
+                                        }
+                                    ]
+                  },
+                  {
+                      "name":  "lcms",
+                      "version":  "2.19.1",
+                      "portVersion":  1,
+                      "tree":  "18ab2c77128f44e6439741effc3f62ccaa9f36f7",
+                      "files":  [
+                                    {
+                                        "path":  "fix-shared-library.patch",
+                                        "sha256":  "5b78866d2e35af4904de1cb698b2e582cd990529e82844450417219f62428588"
+                                    },
+                                    {
+                                        "path":  "lcms-config.cmake",
+                                        "sha256":  "ba264064c6b5dc059c73979a290a770ddad36f0636e825a1933b23dbd550acb7"
+                                    },
+                                    {
+                                        "path":  "lcms2-config.cmake",
+                                        "sha256":  "f051240e5863c44385f4f42c3bee33f6c2706c618b3eb197465893055b27b946"
+                                    },
+                                    {
+                                        "path":  "portfile.cmake",
+                                        "sha256":  "9d1318c49c7961e6734b5af0fadf067e866965ce97d143c022126d493fed9f43"
+                                    },
+                                    {
+                                        "path":  "usage",
+                                        "sha256":  "229cf48d8c8bfda2fc8eefa5588f774b0235697c27e870ef023d0d2ef8092e06"
+                                    },
+                                    {
+                                        "path":  "vcpkg.json",
+                                        "sha256":  "52e356de2007e6a528f4bc195ef2b99e5b5b121bb339f3f2c27d33dcecda007a"
+                                    }
+                                ],
+                      "resources":  [
+                                        {
+                                            "file":  "mm2-Little-CMS-lcms2.19.1.tar.gz",
+                                            "url":  "https://github.com/mm2/Little-CMS/archive/lcms2.19.1.tar.gz",
+                                            "sha512":  "1b2781ed8898e65f15be17cf0130a1500ec0bf5ca5159f871dff5692e387747be9526feef0bc7c370200656fc0aabe3036746041285a3978e90adec200d685f2"
+                                        }
+                                    ]
+                  },
+                  {
+                      "name":  "zlib",
+                      "version":  "1.3.2",
+                      "portVersion":  2,
+                      "tree":  "f4f43a5a505cda1a0d1ff056be1fdba9e566242e",
+                      "files":  [
+                                    {
+                                        "path":  "0001-no-version-script-on-ohos.patch",
+                                        "sha256":  "f8c54d2dfd0a37d2f6e7473b1dba86b9e5ac423f522de9021b62c6c8c226ff76"
+                                    },
+                                    {
+                                        "path":  "portfile.cmake",
+                                        "sha256":  "ea47bb5089d792f31127ad26e780e78bb940ad4372aa2d66649a4f446a1a2b72"
+                                    },
+                                    {
+                                        "path":  "usage",
+                                        "sha256":  "2fdbc95707f61d7f468ece88e460b1bcc22713af34978c7a1b80b689fc39cb67"
+                                    },
+                                    {
+                                        "path":  "vcpkg-cmake-wrapper.cmake",
+                                        "sha256":  "2b3c71f1615f0fa0e86d8a87713a12a794df218a90b6c3b6d625fa2f25f73716"
+                                    },
+                                    {
+                                        "path":  "vcpkg.json",
+                                        "sha256":  "e3101aa948dfaeb1b3045d4b8e229f65cae6e277f7a86cf77cea2323e9bb8c79"
+                                    }
+                                ],
+                      "resources":  [
+                                        {
+                                            "file":  "madler-zlib-v1.3.2.tar.gz",
+                                            "url":  "https://github.com/madler/zlib/archive/v1.3.2.tar.gz",
+                                            "sha512":  "16fea4df307a68cf0035858abe2fd550250618a97590e202037acd18a666f57afc10f8836cbbd472d54a0e76539d0e558cb26f059d53de52ff90634bbf4f47d4"
+                                        }
+                                    ]
+                  },
+                  {
+                      "name":  "libjpeg-turbo",
+                      "version":  "3.2.0",
+                      "portVersion":  0,
+                      "tree":  "c7d2d8cbb868863a698862a0da02b4af225f3c72",
+                      "files":  [
+                                    {
+                                        "path":  "add-options-for-docs-headers.patch",
+                                        "sha256":  "ca0974ee39b53aabbe2a1ee0fc02781cad5582d988b49e631b990c63019f770e"
+                                    },
+                                    {
+                                        "path":  "portfile.cmake",
+                                        "sha256":  "7a3d4443ecb74757d6798e1280763da918b4ecee06a4e1c247fb2c3ec71994ff"
+                                    },
+                                    {
+                                        "path":  "usage",
+                                        "sha256":  "431d1fd99d23de6d01df171baa9ab0edcccea16484d7c4ba0691d4ebc474de2d"
+                                    },
+                                    {
+                                        "path":  "vcpkg-cmake-wrapper.cmake",
+                                        "sha256":  "d257c0a541dd60c4b6eb6f46a5e9f128a64a6ec40f3b8b5bc8ab753e7a935c61"
+                                    },
+                                    {
+                                        "path":  "vcpkg.json",
+                                        "sha256":  "df7fbe43a017d5b93308e13b7945e95dc7851964c617287cdc877611b214d055"
+                                    },
+                                    {
+                                        "path":  "workaround_cmake_system_processor.patch",
+                                        "sha256":  "d81f3b6d054e080fa16e52b1900785cf255de771277fa63dbc2c7e8b55776b5c"
+                                    }
+                                ],
+                      "resources":  [
+                                        {
+                                            "file":  "libjpeg-turbo-libjpeg-turbo-3.2.0.tar.gz",
+                                            "url":  "https://github.com/libjpeg-turbo/libjpeg-turbo/archive/3.2.0.tar.gz",
+                                            "sha512":  "1ce063e9e126d55019385da3a6ff4521a9a3958edeab15e2465ae3435026dac6e598277eea066173ada47da37159d0f7812b2227869c10dd141dcfe2ddeab720"
+                                        }
+                                    ]
+                  },
+                  {
+                      "name":  "jasper",
+                      "version":  "4.2.9",
+                      "portVersion":  0,
+                      "tree":  "de48578d1bc3a3080e3ae12c75fcbd785bcecce3",
+                      "files":  [
+                                    {
+                                        "path":  "check-for-atomics-support.patch",
+                                        "sha256":  "3f49d2964db655e27a83ca5d941c33584ecdd8179659eb9099cecd6ac4b819ec"
+                                    },
+                                    {
+                                        "path":  "fix-library-name.patch",
+                                        "sha256":  "791664e7c66bfd4bf497454d47fe67d61e58a1ed7f1a7ae9cc4b8c18fde26ca2"
+                                    },
+                                    {
+                                        "path":  "no_stdc_check.patch",
+                                        "sha256":  "2170f3e0e4badd2061d666d29400aa5a3b183e8eca1532ec8d05888352f7bec9"
+                                    },
+                                    {
+                                        "path":  "portfile.cmake",
+                                        "sha256":  "a8e1aa03854b7d45230c50d4ffce21c77da7751a062b011b6eba3d08947d544c"
+                                    },
+                                    {
+                                        "path":  "vcpkg.json",
+                                        "sha256":  "3eb27bd60ad107dd1654df104ac2220338edd698b15c33b2e1b108a6be6675c0"
+                                    }
+                                ],
+                      "resources":  [
+                                        {
+                                            "file":  "jasper-software-jasper-version-4.2.9.tar.gz",
+                                            "url":  "https://github.com/jasper-software/jasper/archive/version-4.2.9.tar.gz",
+                                            "sha512":  "5c74521150f49a1055b909e01629ced3b97f222d0d81b0f5b42dcca4915fff11a11e247cc1ec37bcb669b819812892c950ec980275cbebe9897a2aec8b52ab3d"
+                                        }
+                                    ]
+                  },
+                  {
+                      "name":  "glm",
+                      "version":  "1.0.3",
+                      "portVersion":  0,
+                      "tree":  "fbe815929bda5a29c7d1890ddae28f31e8fe4f5d",
+                      "files":  [
+                                    {
+                                        "path":  "portfile.cmake",
+                                        "sha256":  "48a479fca2fb67ec7dff2a555e42930803a677a18fb132d102cfd33752ee4d84"
+                                    },
+                                    {
+                                        "path":  "usage",
+                                        "sha256":  "2e9da7655db7eb2a2b58bb857e20ddfb46c0483235d2c868e819f72d10b18287"
+                                    },
+                                    {
+                                        "path":  "vcpkg.json",
+                                        "sha256":  "d868ca182357c201daf928b7c6c112b3410204b8729576b3c96f125885285676"
+                                    }
+                                ],
+                      "resources":  [
+                                        {
+                                            "file":  "g-truc-glm-1.0.3.tar.gz",
+                                            "url":  "https://github.com/g-truc/glm/archive/1.0.3.tar.gz",
+                                            "sha512":  "0a490f0c79cd4a8ba54f37358f8917cef961dab9e61417c84ae0959c61bc860e5b83f4fb7f27169fb3d08eef1d84131bddde23d60876922310205c901b1273aa"
+                                        }
+                                    ]
+                  }
+              ],
+    "vendored":  [
+                     {
+                         "name":  "glfw",
+                         "version":  "3.4",
+                         "sourceFiles":  [
+                                             {
+                                                 "path":  "libs/GLFW/include/GLFW/glfw3.h",
+                                                 "sha256":  "aa370985f6b493bbe0358a36ab49f5780a6397c0209c6d98a62143dea595b73c"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/include/GLFW/glfw3native.h",
+                                                 "sha256":  "40035881fdc02a9ab265c2086338f749a0411e1c15b68fada678fa34e8bd8958"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/CMakeLists.txt",
+                                                 "sha256":  "2cb9fd73457e14a751f12fac3556c576fcffb54e25c462b5aeb7fe76d4d94aae"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/cocoa_init.m",
+                                                 "sha256":  "0ce5d37c469a75599257309d3a8d8775d6d1fbc3efa0c99152a77a172069fe1f"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/cocoa_joystick.h",
+                                                 "sha256":  "88fb37c0b8bbfea19343e75cfa7090eef7bed67c93bcd789af356ee6c2401210"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/cocoa_joystick.m",
+                                                 "sha256":  "eddd49dc3862a4e16be208c36e540f52fe7f987acf315c4d969eaa6ec32f09b0"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/cocoa_monitor.m",
+                                                 "sha256":  "6659a015ce51ca44f0cde5335b8c4e2baacf3a492cccaa883db10a7829a8263f"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/cocoa_platform.h",
+                                                 "sha256":  "b4d608d7fe69fe147ba600aee4700a9e0b40be225ae9abd698f711fdbf944320"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/cocoa_time.c",
+                                                 "sha256":  "a0094a28331172292a7c506935ee01adb0184d18e89e038ea471094781dd0ce4"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/cocoa_time.h",
+                                                 "sha256":  "596db814eaead6d4cf304fa6ae30688362ce98c9ee551eb3871c3cc166876804"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/cocoa_window.m",
+                                                 "sha256":  "1c280c56aae81d656f736acb69d3a35b8ac55db234665203df953560dd085a78"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/context.c",
+                                                 "sha256":  "839a96ff1dcc712129f9bcb9522b8d459b9d6a9b8d029ce32c729c523b9ea012"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/egl_context.c",
+                                                 "sha256":  "933150523fa2cf24e8f3e7cd279b0d8308635f769e052f035e4088c4ebc83ccf"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/glfw.rc.in",
+                                                 "sha256":  "14f50b28f6d801c6a99549376face170970023ac139a33e4555affecfebe24f1"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/glx_context.c",
+                                                 "sha256":  "e04e784373d59a3f3b08e3de15c8fbfef61c22b9325a2f3d9922a21cc4dd504e"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/init.c",
+                                                 "sha256":  "61ac2188518cae852bc2bfe0c0f2363dad365f8166099a3aa78a3c9ff8504654"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/input.c",
+                                                 "sha256":  "f5efbc7ec6a38a6c462cd2311dbe51616a4810c4dc8d1a2f735195e5cf72c753"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/internal.h",
+                                                 "sha256":  "cc6e93eac5b9957c99bc90e95c34d62f184395345de33e554ab77c23a1148ae0"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/linux_joystick.c",
+                                                 "sha256":  "4e9b95479d3df624d3a5de2b9d708f418cf7e0870c5f05ff2f1a1f88ec84e608"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/linux_joystick.h",
+                                                 "sha256":  "af4e596d0ed1e7eed2699b6567d6ed46157f7c9887bfef15aad5ca15b2a17590"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/mappings.h",
+                                                 "sha256":  "66808cb6f704c7d963a7bae65c02a082f9bb2b5a854d033ce4bd57e22368433f"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/mappings.h.in",
+                                                 "sha256":  "4fba82df496c86a2364733716f214e5f73fbc40376a93e667cda9d877e085c79"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/monitor.c",
+                                                 "sha256":  "1671bbe37502419f08b8072e80a13a78494feea6c008ccb2727ebd44a43afd6a"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/nsgl_context.m",
+                                                 "sha256":  "a0d683795265b18cd183be6a185742e44b866ee80c21d7fcc4ad4363c16d2832"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/null_init.c",
+                                                 "sha256":  "041b02232d5378e9a3ac3fd12da1e91f8276ef1459303e2094ee820e675a3dd1"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/null_joystick.c",
+                                                 "sha256":  "5da9465db10034b81b87c3722328bff7dfc3b4a94670cce71672b7d464fd6820"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/null_joystick.h",
+                                                 "sha256":  "ccd7bec0a32632b0fc81d1c085bba3b89e01a9dc4b6b28cde9ea394909fc700d"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/null_monitor.c",
+                                                 "sha256":  "12face8cf2462b5590d8f1ac5502184e0246696f5d5b117dddca3dfbb5658759"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/null_platform.h",
+                                                 "sha256":  "a93596d5f503d0378de4c347f55d0cd63aad471022a09e3c474f516416520c0e"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/null_window.c",
+                                                 "sha256":  "244c6843b93298f97066a5d40324286b9a2de240200ead019470b0e8846595d9"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/osmesa_context.c",
+                                                 "sha256":  "2bb65aa05606a7bb652ee59fb481c45abb223795163fe9c57d808de3e082b09b"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/platform.c",
+                                                 "sha256":  "117f5e8698eb4f028d7f80ae594fd2b2eb141f55c6122a6c24fd45d1b90209bc"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/platform.h",
+                                                 "sha256":  "14498e12db44b36f695d5cacd2ca2763fd6d6c4d2c5ef3fdcfa103e79d54b49b"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/posix_module.c",
+                                                 "sha256":  "e78e668d01a15695b1d44da660daf8c0fd1696cce1c9b5cca0a2e4e41d67dbe1"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/posix_poll.c",
+                                                 "sha256":  "0432a56fef57a1cd39bee3c0c5120e17991ff8aa56ce8ce39ff1bdac425ce02a"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/posix_poll.h",
+                                                 "sha256":  "4aaeb5ddcc8e8b617463d07d769264d359c8c508a5a9cc9a02b4b49f8dadb3a5"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/posix_thread.c",
+                                                 "sha256":  "898502d86490e8c2e401a3de7a63e7c9566aa99333d676c5c4aaca69b35022b3"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/posix_thread.h",
+                                                 "sha256":  "10e4679442f9650ec2f423572537a0326e972b8f0c02cfb5fb76c3cd107733cd"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/posix_time.c",
+                                                 "sha256":  "548431aa62bc3ead2a82c1f049fd53659b7a92c8702abaa9d9176a0583edadb2"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/posix_time.h",
+                                                 "sha256":  "eccea70e4ada8f6c0fcca9eeb5de01781d2422d28bfe63e795aeb74a7400125c"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/vulkan.c",
+                                                 "sha256":  "5948e9f0b347640473d23f7dfd94cea82375149639f2cbd288491747312d3a33"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/wgl_context.c",
+                                                 "sha256":  "48c2cad35265f7311146182ec4ad811f551929cb6847ef3a0653abbedec88bf8"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_init.c",
+                                                 "sha256":  "48d72f04c500d0c0b2e91444429e141972f81ae03072f6d28b26222ac06983c1"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_joystick.c",
+                                                 "sha256":  "b9c95eed4eeed6eb64864fa031349de83e3421ab7a6c3dcd86cf80fd6b1ad8b1"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_joystick.h",
+                                                 "sha256":  "41cd05e7477314241c5aca9b840682a4ba4b82c358d401612ab83e5bce167c39"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_module.c",
+                                                 "sha256":  "58f0b4a96584b6ad582e90974b07ecbe9ed8d402cadbe54383afbb0ba37d6a0b"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_monitor.c",
+                                                 "sha256":  "4645c2972d8dbf9e11e287b05333f6db585615541217e3dd5d61e9f9fca32e97"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_platform.h",
+                                                 "sha256":  "f7b39efe79c9731762c9dd9848431e795a66fccc871d7ae72930c5e1aeed7c4c"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_thread.c",
+                                                 "sha256":  "92ee8a23a6a729c2cff69975d2dfc46d019a2be0494d17b705495cd3042dcd36"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_thread.h",
+                                                 "sha256":  "cefdd801463eb6901e3ebae02b8204e87e44bd06b2bdc562794dc890886ecc97"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_time.c",
+                                                 "sha256":  "16c54578192e06205a0dbe675ffc93f73df1d971ace8e81ad2a0ba868c99c4e6"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_time.h",
+                                                 "sha256":  "dabfeb7478945930cb6c4ded23cfe76f6e6577b68523c5d8ac2acb1b63b35b21"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/win32_window.c",
+                                                 "sha256":  "863d05bc961acab390e7d4329ced8a2d36f9b10106b9258376d2f72b0cac297f"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/window.c",
+                                                 "sha256":  "c102fd119fd7423ca0cebd17c1fba722d7fe149ef689f09962f6ff79c82dd289"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/wl_init.c",
+                                                 "sha256":  "56f0d25a4e665f959749427c7c90498f414c9f515403671027e2da6a0000f77d"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/wl_monitor.c",
+                                                 "sha256":  "47161326acd583a0787a37927535ffdbe03561923f40a316d9f02b40c28ec16b"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/wl_platform.h",
+                                                 "sha256":  "fb13b006ad8e13df67a8c267e880324f6f131e1d5cba8b072061e91efa30ee71"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/wl_window.c",
+                                                 "sha256":  "62e33d84a5f1ebc7d06979194aea50351a9a8d396b27f20e894fc693ed3a117f"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/x11_init.c",
+                                                 "sha256":  "4c091f59628d3221c6fc2fb3e1451b6147dc86118fa371f06984915581e735e8"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/x11_monitor.c",
+                                                 "sha256":  "cd1c15c5fc684a58472ded4cbad3509f383c6d6611b4437d8469b54feedbdaab"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/x11_platform.h",
+                                                 "sha256":  "c35ff50d31c47eee88a7613b8ff47611d6bd892657545b6d44b1911dc7b7466a"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/x11_window.c",
+                                                 "sha256":  "7c5a60a507767c5b311437a74e85e547914df631be4f74fa75746063762019da"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/xkb_unicode.c",
+                                                 "sha256":  "57ddc9155229a445c1f6e1542fe3ddce8d4ad0c5d5f7f0c3da476d58fb5f650c"
+                                             },
+                                             {
+                                                 "path":  "libs/GLFW/src/xkb_unicode.h",
+                                                 "sha256":  "b80f53223f42108f4ff0fc51cb8e94c2c9b3ba87888760842958bf43bd4cd19a"
+                                             }
+                                         ],
+                         "resources":  [
+                                           {
+                                               "file":  "glfw-3.4.zip",
+                                               "url":  "https://github.com/glfw/glfw/releases/download/3.4/glfw-3.4.zip",
+                                               "sha512":  "03de56a0599275ff57759ca19e8f69176058252b5e9976193cc3d9bb7b7b78b6a8dac6ed91de483d03c1b4807d21e1302e5e47c2f0c21e63becb4aba9d5affdc"
+                                           }
+                                       ]
+                     }
+                 ]
+}

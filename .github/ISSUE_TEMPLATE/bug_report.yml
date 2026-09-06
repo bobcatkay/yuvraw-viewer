@@ -1,0 +1,40 @@
+name: Bug report (English)
+description: Report a reproducible bug; read SECURITY.md first for security issues.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        [简体中文](https://github.com/bobcatkay/yuvraw-viewer/issues/new?template=bug_report.zh-CN.yml)
+        Do not upload private originals, complete log directories, or sensitive paths. Read SECURITY.md for vulnerabilities. Prefer a minimal synthetic reproduction.
+  - type: input
+    id: version
+    attributes:
+      label: Application version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Windows version, x64, GPU and driver; for HDR include display and Windows HDR state; for optional formats include WIC codec availability.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps and actual result
+      description: For raw input include format, dimensions, byte stride, bit depth/alignment, byte order, matrix/range/transfer. Private originals are not required.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence (optional)
+      description: Minimal log excerpt, screenshot, or synthetic fixture generator. Remove usernames, full paths, camera serial numbers, and private image metadata.

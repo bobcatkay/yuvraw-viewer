@@ -1,0 +1,9 @@
+diff --git a/imconfig.h b/imconfig.h
+index a1e29e849bc8c6125a0c567fa6cb528a293025cb..554bba667cb1c26470be4506b56851a5a8cfccaf 100644
+--- a/imconfig.h
++++ b/imconfig.h
+@@ -139,3 +139,4 @@ namespace ImGui
+     void MyFunction(const char* name, MyMatrix44* mtx);
+ }
+ */
++

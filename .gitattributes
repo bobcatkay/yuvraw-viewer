@@ -1,0 +1,10 @@
+# Recipe hashes refer to exact upstream bytes, including mixed LF/CRLF files.
+# Disable conversion in both the index and working tree for these snapshots.
+third-party/vcpkg-ports/** -text
+libs/GLFW/src/** text eol=lf
+libs/GLFW/include/** text eol=lf
+libs/GLFW/LICENSE.md text eol=lf
+*.otf binary
+*.ico binary
+*.png binary
+*.jpg binary

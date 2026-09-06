@@ -1,0 +1,571 @@
+{
+  "$schema": "https://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "properties": [
+      {
+        "value": "Windows x64 static-md",
+        "name": "yuvraw:target"
+      },
+      {
+        "value": "7ff71c68261ecf3b60cdb8772f2e6759ee0a71b1",
+        "name": "yuvraw:vcpkg-baseline"
+      },
+      {
+        "value": "Application libraries and bundled fonts; system components and general build tools excluded. LibRaw-cmake is a build helper; JasPer remains a restored port with its LibRaw path disabled.",
+        "name": "yuvraw:scope"
+      }
+    ],
+    "component": {
+      "type": "application",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-3.0-only"
+          }
+        }
+      ],
+      "name": "YUVRaw",
+      "bom-ref": "yuvraw"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "libraw",
+      "name": "libraw",
+      "version": "0.22.2",
+      "licenses": [
+        {
+          "expression": "LGPL-2.1-only AND BSD-3-Clause AND MIT"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://github.com/LibRaw/LibRaw/archive/0.22.2.tar.gz",
+          "hashes": [
+            {
+              "content": "24313fbdc0f91432cf1de9fd1a7af56cc01c314760194a32fed8e7f5b991ff35e34fe04606e40ed86b3982f88e141c54b528d33631b420b71525abb06c95f5f4",
+              "alg": "SHA-512"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "name": "yuvraw:license-scope",
+          "value": "LGPL-2.1-only selected; BSD covers DCB/FBDD and source-retained disabled X3F tools. MIT attribution for Adobe DNG SDK 1.4 fragments is declared in upstream COPYRIGHT; the separate Adobe SDK is not built or bundled. Original component notices are retained."
+        },
+        {
+          "value": "0",
+          "name": "yuvraw:vcpkg-port-revision"
+        },
+        {
+          "value": "fba030a7be23a0356eb36ed721db8d55b0b64d93",
+          "name": "yuvraw:vcpkg-port-tree"
+        },
+        {
+          "value": "third-party/sources.lock.json",
+          "name": "yuvraw:source-lock"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "lcms",
+      "name": "lcms",
+      "version": "2.19.1",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://github.com/mm2/Little-CMS/archive/lcms2.19.1.tar.gz",
+          "hashes": [
+            {
+              "content": "1b2781ed8898e65f15be17cf0130a1500ec0bf5ca5159f871dff5692e387747be9526feef0bc7c370200656fc0aabe3036746041285a3978e90adec200d685f2",
+              "alg": "SHA-512"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "value": "1",
+          "name": "yuvraw:vcpkg-port-revision"
+        },
+        {
+          "value": "18ab2c77128f44e6439741effc3f62ccaa9f36f7",
+          "name": "yuvraw:vcpkg-port-tree"
+        },
+        {
+          "value": "third-party/sources.lock.json",
+          "name": "yuvraw:source-lock"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "zlib",
+      "name": "zlib",
+      "version": "1.3.2",
+      "licenses": [
+        {
+          "expression": "Zlib"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://github.com/madler/zlib/archive/v1.3.2.tar.gz",
+          "hashes": [
+            {
+              "content": "16fea4df307a68cf0035858abe2fd550250618a97590e202037acd18a666f57afc10f8836cbbd472d54a0e76539d0e558cb26f059d53de52ff90634bbf4f47d4",
+              "alg": "SHA-512"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "value": "2",
+          "name": "yuvraw:vcpkg-port-revision"
+        },
+        {
+          "value": "f4f43a5a505cda1a0d1ff056be1fdba9e566242e",
+          "name": "yuvraw:vcpkg-port-tree"
+        },
+        {
+          "value": "third-party/sources.lock.json",
+          "name": "yuvraw:source-lock"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "libjpeg-turbo",
+      "name": "libjpeg-turbo",
+      "version": "3.2.0",
+      "licenses": [
+        {
+          "expression": "IJG AND BSD-3-Clause"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://github.com/libjpeg-turbo/libjpeg-turbo/archive/3.2.0.tar.gz",
+          "hashes": [
+            {
+              "content": "1ce063e9e126d55019385da3a6ff4521a9a3958edeab15e2465ae3435026dac6e598277eea066173ada47da37159d0f7812b2227869c10dd141dcfe2ddeab720",
+              "alg": "SHA-512"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "value": "0",
+          "name": "yuvraw:vcpkg-port-revision"
+        },
+        {
+          "value": "c7d2d8cbb868863a698862a0da02b4af225f3c72",
+          "name": "yuvraw:vcpkg-port-tree"
+        },
+        {
+          "value": "third-party/sources.lock.json",
+          "name": "yuvraw:source-lock"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "jasper",
+      "name": "jasper",
+      "version": "4.2.9",
+      "licenses": [
+        {
+          "expression": "JasPer-2.0"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://github.com/jasper-software/jasper/archive/version-4.2.9.tar.gz",
+          "hashes": [
+            {
+              "content": "5c74521150f49a1055b909e01629ced3b97f222d0d81b0f5b42dcca4915fff11a11e247cc1ec37bcb669b819812892c950ec980275cbebe9897a2aec8b52ab3d",
+              "alg": "SHA-512"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "value": "0",
+          "name": "yuvraw:vcpkg-port-revision"
+        },
+        {
+          "value": "de48578d1bc3a3080e3ae12c75fcbd785bcecce3",
+          "name": "yuvraw:vcpkg-port-tree"
+        },
+        {
+          "value": "third-party/sources.lock.json",
+          "name": "yuvraw:source-lock"
+        },
+        {
+          "value": "Restored by vcpkg; LibRaw 0.22.2 RedCine/JasPer path disabled in current build",
+          "name": "yuvraw:reachability"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "glm",
+      "name": "glm",
+      "version": "1.0.3",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://github.com/g-truc/glm/archive/1.0.3.tar.gz",
+          "hashes": [
+            {
+              "content": "0a490f0c79cd4a8ba54f37358f8917cef961dab9e61417c84ae0959c61bc860e5b83f4fb7f27169fb3d08eef1d84131bddde23d60876922310205c901b1273aa",
+              "alg": "SHA-512"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "value": "0",
+          "name": "yuvraw:vcpkg-port-revision"
+        },
+        {
+          "value": "fbe815929bda5a29c7d1890ddae28f31e8fe4f5d",
+          "name": "yuvraw:vcpkg-port-tree"
+        },
+        {
+          "value": "third-party/sources.lock.json",
+          "name": "yuvraw:source-lock"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "libraw-cmake",
+      "name": "LibRaw-cmake",
+      "version": "eb98e4325aef2ce85d2eb031c2ff18640ca616d3",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "url": "https://github.com/LibRaw/LibRaw-cmake/tree/eb98e4325aef2ce85d2eb031c2ff18640ca616d3",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "glfw",
+      "name": "GLFW",
+      "version": "3.4",
+      "licenses": [
+        {
+          "license": {
+            "id": "Zlib"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "url": "https://github.com/glfw/glfw/tree/3.4",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "imgui",
+      "name": "Dear ImGui docking",
+      "version": "f4d9359095eff3eb03f685921edc1cf0e37b1687",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "url": "https://github.com/ocornut/imgui/tree/f4d9359095eff3eb03f685921edc1cf0e37b1687",
+          "type": "vcs"
+        }
+      ],
+      "properties": [
+        {
+          "value": "third-party/vendored-provenance.json",
+          "name": "yuvraw:provenance"
+        },
+        {
+          "value": "One trailing blank line in imconfig.h; see third-party/imgui-local.patch",
+          "name": "yuvraw:local-changes"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "stb_rect_pack",
+      "name": "stb_rect_pack (ImGui embedded)",
+      "version": "1.01",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "url": "https://github.com/ocornut/imgui/blob/f4d9359095eff3eb03f685921edc1cf0e37b1687/imstb_rectpack.h",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "stb_textedit",
+      "name": "stb_textedit (ImGui embedded)",
+      "version": "1.14",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "url": "https://github.com/ocornut/imgui/blob/f4d9359095eff3eb03f685921edc1cf0e37b1687/imstb_textedit.h",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "stb_truetype",
+      "name": "stb_truetype (ImGui embedded)",
+      "version": "1.26",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "url": "https://github.com/ocornut/imgui/blob/f4d9359095eff3eb03f685921edc1cf0e37b1687/imstb_truetype.h",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "proggyclean",
+      "name": "ProggyClean embedded font",
+      "version": "f4d9359095eff3eb03f685921edc1cf0e37b1687",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "url": "https://github.com/ocornut/imgui/blob/f4d9359095eff3eb03f685921edc1cf0e37b1687/imgui_draw.cpp",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "glad",
+      "name": "GLAD generated loader",
+      "version": "0.1.36-generated-2024-08-16",
+      "licenses": [
+        {
+          "license": {
+            "id": "CC0-1.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "url": "https://github.com/Dav1dde/glad/tree/v0.1.36",
+          "type": "vcs"
+        }
+      ],
+      "properties": [
+        {
+          "value": "third-party/vendored-provenance.json",
+          "name": "yuvraw:provenance"
+        },
+        {
+          "value": "CC0-1.0 applies to generated loader grant only; Khronos headers keep their notices; generator and registry inputs are separate, see THIRD_PARTY_NOTICES.md",
+          "name": "yuvraw:license-scope"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "khrplatform",
+      "name": "Khronos khrplatform.h",
+      "version": "vendored-2008-2018",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "url": "https://github.com/KhronosGroup/EGL-Registry",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "noto-cjk-sc",
+      "name": "Noto Sans CJK SC Regular",
+      "version": "2.004",
+      "licenses": [
+        {
+          "license": {
+            "id": "OFL-1.1"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "url": "https://github.com/notofonts/noto-cjk/tree/523d033d6cb47f4a80c58a35753646f5c3608a78",
+          "type": "vcs"
+        }
+      ],
+      "hashes": [
+        {
+          "content": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+          "alg": "SHA-256"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "yuvraw",
+      "dependsOn": [
+        "libraw",
+        "glm",
+        "glfw",
+        "imgui",
+        "glad",
+        "noto-cjk-sc"
+      ]
+    },
+    {
+      "ref": "libraw",
+      "dependsOn": [
+        "lcms",
+        "zlib",
+        "libjpeg-turbo"
+      ]
+    },
+    {
+      "ref": "imgui",
+      "dependsOn": [
+        "stb_rect_pack",
+        "stb_textedit",
+        "stb_truetype",
+        "proggyclean",
+        "glfw"
+      ]
+    },
+    {
+      "ref": "glad",
+      "dependsOn": [
+        "khrplatform"
+      ]
+    },
+    {
+      "ref": "lcms",
+      "dependsOn": []
+    },
+    {
+      "ref": "zlib",
+      "dependsOn": []
+    },
+    {
+      "ref": "libjpeg-turbo",
+      "dependsOn": []
+    },
+    {
+      "ref": "jasper",
+      "dependsOn": []
+    },
+    {
+      "ref": "glm",
+      "dependsOn": []
+    },
+    {
+      "ref": "libraw-cmake",
+      "dependsOn": []
+    },
+    {
+      "ref": "glfw",
+      "dependsOn": []
+    },
+    {
+      "ref": "stb_rect_pack",
+      "dependsOn": []
+    },
+    {
+      "ref": "stb_textedit",
+      "dependsOn": []
+    },
+    {
+      "ref": "stb_truetype",
+      "dependsOn": []
+    },
+    {
+      "ref": "proggyclean",
+      "dependsOn": []
+    },
+    {
+      "ref": "khrplatform",
+      "dependsOn": []
+    },
+    {
+      "ref": "noto-cjk-sc",
+      "dependsOn": []
+    }
+  ]
+}
