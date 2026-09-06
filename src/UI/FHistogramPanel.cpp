@@ -301,8 +301,14 @@ void FHistogramPanel::RenderPlot(const char* Label, const FHistogramBins& Bins, 
 void FHistogramPanel::Render()
 {
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-    ImGui::Begin(FLocalization::WindowTitle(EUiText::Histogram));
+    const bool bVisible = ImGui::Begin(FLocalization::WindowTitle(EUiText::Histogram));
     ImGui::PopStyleColor();
+
+    if (!bVisible)
+    {
+        ImGui::End();
+        return;
+    }
 
     if (!bHasData)
     {

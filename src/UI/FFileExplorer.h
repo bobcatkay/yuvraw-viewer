@@ -18,7 +18,6 @@ public:
      *         false 表示替换对比图，应保留当前主图选中标记。
      */
     using FileSelectedCallback = std::function<bool(const std::string&)>;
-    using DirectorySelectedCallback = std::function<void(const std::string&)>;
     using FileCompareCallback = std::function<void(const std::string&)>;
     using FileExportCallback = std::function<void(const std::vector<std::string>&)>;
 
@@ -44,11 +43,6 @@ public:
      * 设置文件激活回调。回调返回值决定是否更新普通选中状态。
      */
     void SetOnFileSelected(FileSelectedCallback Callback);
-
-    /**
-     * 设置目录选择回调
-     */
-    void SetOnDirectorySelected(DirectorySelectedCallback Callback);
 
     /**
      * 设置"添加为对比图"回调（文件右键菜单）
@@ -106,7 +100,6 @@ private:
     std::vector<std::filesystem::path> CurrentDirectories;
 
     FileSelectedCallback OnFileSelected;
-    DirectorySelectedCallback OnDirectorySelected;
     FileCompareCallback OnFileCompareRequested;
     FileExportCallback OnFileExportRequested;
 

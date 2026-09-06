@@ -3,6 +3,7 @@
 #include "FImageFormatDesc.h"
 #include "FImageSampler.h"
 #include "FWebpEncoder.h"
+#include "Core/FLocalization.h"
 #include "Util.h"
 
 #include <algorithm>
@@ -23,6 +24,9 @@ using Microsoft::WRL::ComPtr;
 
 namespace
 {
+    // 原名及 _1 到 _9999；耗尽候选时必须失败，不能返回一个已存在的文件。
+    constexpr int32_t kMaxOutputPathCandidates = 10000;
+
     /**
      * 作用域内的 COM 初始化。GLFW 已经初始化过 COM，这里通常拿到 S_FALSE 或
      * RPC_E_CHANGED_MODE，都不算失败；只有自己成功初始化时才负责反初始化。
@@ -456,16 +460,30 @@ namespace FImageExporter
 
         // 不覆盖：依次试 _1、_2……源文件本身就是同名同格式时也走这条路径，
         // 否则"把 a.png 导出成 png"会把源文件读到一半又写回去
-        std::error_code ec;
-        int32_t suffix = 1;
-
-        while (std::filesystem::exists(candidate, ec) && suffix < 10000)
+        for (int32_t suffix = 0; suffix < kMaxOutputPathCandidates; ++suffix)
         {
-            candidate = directory / std::filesystem::u8path(stem + "_" + std::to_string(suffix) + extension);
-            ++suffix;
+            if (suffix > 0)
+            {
+                candidate = directory / std::filesystem::u8path(
+                    stem + "_" + std::to_string(suffix) + extension);
+            }
+
+            std::error_code ec;
+            const bool bExists = std::filesystem::exists(candidate, ec);
+            if (ec)
+            {
+                // 无法检查也不能当作不存在，否则“不覆盖”可能变成覆盖写入。
+                LOGE("MakeOutputPath", "Failed to inspect output path: %s", ec.message().c_str());
+                return {};
+            }
+            if (!bExists)
+            {
+                return candidate.u8string();
+            }
         }
 
-        return candidate.u8string();
+        LOGE("MakeOutputPath", "No available output name after %d candidates", kMaxOutputPathCandidates);
+        return {};
     }
 
     bool Export(
@@ -475,6 +493,13 @@ namespace FImageExporter
         const std::string& OutputPath,
         std::string& OutError)
     {
+        if (OutputPath.empty())
+        {
+            OutError = FLocalization::Text(EUiText::ExportOutputPathUnavailable);
+            LOGE("Export", "No output path is available");
+            return false;
+        }
+
         if (!Source.IsValid())
         {
             OutError = u8"源图像无效";

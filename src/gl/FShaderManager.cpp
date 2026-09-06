@@ -3,7 +3,6 @@
 #include "FShaders.h"
 #include "Image/FImageFormatDesc.h"
 #include "Util.h"
-#include <algorithm>
 
 FShaderManager& FShaderManager::Get()
 {
@@ -21,9 +20,9 @@ FShader* FShaderManager::GetShaderForFormat(EImageFormat Format)
     // 检查缓存中是否已有该格式的着色器
     auto it = ShaderCache.find(Format);
 
-    if (it != ShaderCache.end() && it->second && it->second->IsValid())
+    if (it != ShaderCache.end())
     {
-        return it->second.get();
+        return it->second && it->second->IsValid() ? it->second.get() : nullptr;
     }
 
     // 创建新着色器
@@ -31,6 +30,8 @@ FShader* FShaderManager::GetShaderForFormat(EImageFormat Format)
 
     if (!shader || !shader->IsValid())
     {
+        // 查看器逐帧查询；同一份 GLSL 编译失败后重复编译只会卡顿并刷满日志。
+        ShaderCache[Format] = nullptr;
         LOGE("GetShaderForFormat", "Failed to create shader for format: %d", static_cast<int>(Format));
         return nullptr;
     }
@@ -48,7 +49,7 @@ void FShaderManager::InitializeAllShaders()
 {
     // 遍历格式描述表把所有着色器编一遍。
     // 着色器是运行时编译的，GLSL 里的笔误只有在用户恰好打开那种格式时才会暴露；
-    // 启动时全编一次能让问题立刻出现在日志里。
+    // 开发期 GPU 验证会显式调用这里；正常启动仍按实际打开的格式延迟编译。
     int32_t succeeded = 0;
     int32_t failed = 0;
 
@@ -78,14 +79,6 @@ void FShaderManager::Shutdown()
     if (ShaderCache.empty())
     {
         return;
-    }
-
-    for (auto& pair : ShaderCache)
-    {
-        if (pair.second)
-        {
-            pair.second->Destroy();
-        }
     }
 
     ShaderCache.clear();

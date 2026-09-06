@@ -57,6 +57,8 @@ bool FRenderer::Initialize(void* Window)
     // 加载OpenGL函数
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
+        LOGE("Initialize", "Failed to load OpenGL functions");
+        NativeWindow = nullptr;
         return false;
     }
 
@@ -103,11 +105,21 @@ bool FRenderer::Initialize(void* Window)
     InitializeImGuiStyle();
 
     // 设置平台和渲染后端
-    ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)Window, true);
+    if (!ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)Window, true))
+    {
+        LOGE("Initialize", "Failed to initialize the ImGui GLFW backend");
+        Shutdown();
+        return false;
+    }
 
     // 与 FWindow 请求的 3.3 core 上下文保持一致
     const char* glsl_version = "#version 330";
-    ImGui_ImplOpenGL3_Init(glsl_version);
+    if (!ImGui_ImplOpenGL3_Init(glsl_version))
+    {
+        LOGE("Initialize", "Failed to initialize the ImGui OpenGL backend");
+        Shutdown();
+        return false;
+    }
 
     const auto fontStart = std::chrono::steady_clock::now();
     CurrentUiScale = QueryWindowContentScale();
@@ -118,6 +130,7 @@ bool FRenderer::Initialize(void* Window)
     if (!RebuildUiFont(CurrentUiScale))
     {
         LOGE("Initialize", "Failed to create the ImGui font texture");
+        Shutdown();
         return false;
     }
 
@@ -230,22 +243,35 @@ bool FRenderer::EndFrame()
 
 void FRenderer::Shutdown()
 {
-    if (bIsInitialized)
-    {
-        // 呈现层持有 GL 资源，必须在 GL 上下文还活着时先放掉
-        HdrPresenter.reset();
+    // 初始化可能在后端或字体阶段失败，不能仅凭最终成功标志决定是否释放资源。
+    // 呈现层持有 GL 资源，必须在 GL 上下文还活着时先放掉。
+    HdrPresenter.reset();
 
-        ImGui_ImplOpenGL3_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-        if (ImGuiContextPtr)
+    if (ImGuiContextPtr)
+    {
+        ImGui::SetCurrentContext(ImGuiContextPtr);
+        ImGuiIO& io = ImGui::GetIO();
+
+        // 后端以各自的 UserData 表示已初始化；对尚未建立的后端调用 Shutdown 会断言。
+        if (io.BackendRendererUserData)
         {
-            ImGui::DestroyContext();
-            ImGuiContextPtr = nullptr;
+            ImGui_ImplOpenGL3_Shutdown();
         }
-        FUiScale::Set(kMinimumUiScale);
-        CurrentUiScale = kMinimumUiScale;
-        bIsInitialized = false;
+        if (io.BackendPlatformUserData)
+        {
+            ImGui_ImplGlfw_Shutdown();
+        }
+
+        ImGui::DestroyContext(ImGuiContextPtr);
+        ImGuiContextPtr = nullptr;
     }
+
+    // io.IniFilename 借用此字符串，必须等 ImGui 上下文销毁后才能清空。
+    ImGuiIniPath.clear();
+    NativeWindow = nullptr;
+    FUiScale::Set(kMinimumUiScale);
+    CurrentUiScale = kMinimumUiScale;
+    bIsInitialized = false;
 }
 
 ImGuiContext* FRenderer::GetImGuiContext() const

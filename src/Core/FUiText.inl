@@ -302,6 +302,7 @@ YUVRAW_UI_TEXT(DifferenceFailed, u8"计算差值失败（内存不足？）", u8
 YUVRAW_UI_TEXT(GeneratedDifferenceName, u8"<差值图>", u8"<Difference image>")
 YUVRAW_UI_TEXT(WaitBeforeExport, u8"图片加载完成后再导出", u8"Wait for the image to finish loading before exporting")
 YUVRAW_UI_TEXT(ExportInternalError, u8"导出失败：内部错误", u8"Export failed: internal error")
+YUVRAW_UI_TEXT(ExportOutputPathUnavailable, u8"无法分配输出文件名，请检查目录权限或更换输出目录", u8"Could not allocate an output filename. Check directory permissions or choose another output directory.")
 YUVRAW_UI_TEXT(Exporting, u8"正在导出...", u8"Exporting...")
 YUVRAW_UI_TEXT(FileLoadFailedSuffix, u8"：无法加载（格式或分辨率参数不对？）", u8": could not load (check format and dimensions)")
 YUVRAW_UI_TEXT(ExportComplete, u8"导出完成", u8"Export complete")

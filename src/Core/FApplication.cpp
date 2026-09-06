@@ -5,15 +5,11 @@
 #include "FMainDockSpace.h"
 #include "FCommandLine.h"
 #include "FUserSettings.h"
-#include "UI/FImageViewer.h"
-#include "UI/FPropertyPanel.h"
 #include "Image/FImageLoadParams.h"
 #include "Image/FImageLoader.h"
 #include "gl/FShaderManager.h"
 #include "Util.h"
 #include <chrono>
-#include <iostream>
-#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -27,13 +23,9 @@ namespace
     constexpr double kSuspendedEventWaitSeconds = 0.1;
 }
 
-FApplication* FApplication::Instance = nullptr;
-
 FApplication::FApplication()
     : bIsInitialized(false)
-    , bShouldClose(false)
 {
-    Instance = this;
 }
 
 FApplication::~FApplication()
@@ -212,7 +204,7 @@ int FApplication::Run()
     std::chrono::steady_clock::time_point firstRenderableFrameStart;
 
     // 主循环
-    while (!Window->ShouldClose() && !bShouldClose && !MainDockSpace->WantsToClose())
+    while (!Window->ShouldClose() && !MainDockSpace->WantsToClose())
     {
         if (bFirstRenderableFrame)
         {
@@ -353,7 +345,6 @@ void FApplication::Shutdown()
 FApplication& FApplication::Get()
 {
     // 函数内静态对象：程序退出时自动析构，不泄漏。
-    // 构造函数会把 Instance 指向自己。
     static FApplication ApplicationInstance;
 
     return ApplicationInstance;

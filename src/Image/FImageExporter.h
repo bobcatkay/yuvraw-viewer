@@ -96,6 +96,7 @@ namespace FImageExporter
      * 拼出输出文件路径：<输出目录>/<源文件主名><扩展名>
      *
      * bOverwrite 为 false 且同名文件已存在时，依次尝试 _1、_2……
+     * 候选名称耗尽或路径检查失败时返回空字符串；Export 会将其报告为失败。
      */
     std::string MakeOutputPath(const FExportSettings& Settings, const std::string& SourcePath);
 

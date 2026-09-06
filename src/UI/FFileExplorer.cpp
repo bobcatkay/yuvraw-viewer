@@ -543,16 +543,19 @@ void FFileExplorer::Render()
     // 折叠或处于未选中的标签页时不接收拖放
     bDropRectValid = bVisible;
 
-    if (bVisible)
+    if (!bVisible)
     {
-        const ImVec2 windowPos = ImGui::GetWindowPos();
-        const ImVec2 windowSize = ImGui::GetWindowSize();
-
-        DropRectMin[0] = windowPos.x;
-        DropRectMin[1] = windowPos.y;
-        DropRectMax[0] = windowPos.x + windowSize.x;
-        DropRectMax[1] = windowPos.y + windowSize.y;
+        // 隐藏面板仍需配对 End，但不必遍历目录、转换路径或生成图标。
+        ImGui::End();
+        return;
     }
+
+    const ImVec2 windowPos = ImGui::GetWindowPos();
+    const ImVec2 windowSize = ImGui::GetWindowSize();
+    DropRectMin[0] = windowPos.x;
+    DropRectMin[1] = windowPos.y;
+    DropRectMax[0] = windowPos.x + windowSize.x;
+    DropRectMax[1] = windowPos.y + windowSize.y;
 
     RenderCurrentDirectoryBar();
 
@@ -597,11 +600,6 @@ void FFileExplorer::Render()
         if (FUiIcons::IconSelectable(id.c_str(), dirName.c_str(), false, true))
         {
             SetCurrentDirectory(dirPath);
-
-            if (OnDirectorySelected)
-            {
-                OnDirectorySelected(dirPath);
-            }
         }
     }
 
@@ -846,11 +844,6 @@ void FFileExplorer::SetOnFileSelected(FileSelectedCallback Callback)
     OnFileSelected = Callback;
 }
 
-void FFileExplorer::SetOnDirectorySelected(DirectorySelectedCallback Callback)
-{
-    OnDirectorySelected = Callback;
-}
-
 void FFileExplorer::SetOnFileCompareRequested(FileCompareCallback Callback)
 {
     OnFileCompareRequested = Callback;
@@ -898,6 +891,8 @@ void FFileExplorer::Refresh()
     }
     catch (const std::exception& exception)
     {
+        CurrentFiles.clear();
+        CurrentDirectories.clear();
         // 权限不足 / 目录已被删除等，保持空列表，同时留下可诊断的失败原因。
         LOGE(
             "Refresh",
@@ -906,17 +901,18 @@ void FFileExplorer::Refresh()
             exception.what());
     }
 
-    // 丢掉已经不在列表里的选中项（切目录、文件被删）
+    // CurrentFiles 已按原生路径排序；每个选中路径只转换一次并二分查找，
+    // 避免反复扫描整份列表，同时保留 SelectedFiles 的批量导出顺序。
     SelectedFiles.erase(
         std::remove_if(
             SelectedFiles.begin(),
             SelectedFiles.end(),
             [this](const std::string& Path)
             {
-                return std::find_if(
+                return !std::binary_search(
                     CurrentFiles.begin(),
                     CurrentFiles.end(),
-                    [&Path](const std::filesystem::path& File) { return File.u8string() == Path; }) == CurrentFiles.end();
+                    std::filesystem::u8path(Path));
             }),
         SelectedFiles.end());
 

@@ -1,7 +1,10 @@
 #include "FShader.h"
 #include "Util.h"
-#include <iostream>
-#include <vector>
+
+namespace
+{
+    constexpr GLsizei kShaderInfoLogCapacity = 512;
+}
 
 FShader::FShader()
     : ProgramID(0)
@@ -17,6 +20,9 @@ FShader::~FShader()
 
 bool FShader::CreateFromSource(const std::string& VertexSource, const std::string& FragmentSource)
 {
+    // 同一包装对象可以重新编译；先释放旧程序并清空其 uniform 地址。
+    Destroy();
+
     // 编译顶点着色器
     VertexShaderID = CompileShader(GL_VERTEX_SHADER, VertexSource);
     if (VertexShaderID == 0)
@@ -28,31 +34,36 @@ bool FShader::CreateFromSource(const std::string& VertexSource, const std::strin
     FragmentShaderID = CompileShader(GL_FRAGMENT_SHADER, FragmentSource);
     if (FragmentShaderID == 0)
     {
-        glDeleteShader(VertexShaderID);
+        Destroy();
         return false;
     }
 
     // 创建着色器程序
     ProgramID = glCreateProgram();
+    if (ProgramID == 0)
+    {
+        LOGE("CreateFromSource", "Failed to allocate shader program");
+        Destroy();
+        return false;
+    }
+
     glAttachShader(ProgramID, VertexShaderID);
     glAttachShader(ProgramID, FragmentShaderID);
     glLinkProgram(ProgramID);
 
     // 检查链接状态
-    GLint success;
+    GLint success = GL_FALSE;
     glGetProgramiv(ProgramID, GL_LINK_STATUS, &success);
 
     if (!success)
     {
-        char infoLog[512];
-        glGetProgramInfoLog(ProgramID, 512, nullptr, infoLog);
+        char infoLog[kShaderInfoLogCapacity] = {};
+        glGetProgramInfoLog(ProgramID, kShaderInfoLogCapacity, nullptr, infoLog);
 
         LOGE("Create", "Shader program linking failed, InfoLog: %s", infoLog);
 
-        glDeleteProgram(ProgramID);
-        glDeleteShader(VertexShaderID);
-        glDeleteShader(FragmentShaderID);
-        ProgramID = 0;
+        // 统一清理并归零，避免析构再次删除已释放、甚至已被驱动复用的句柄。
+        Destroy();
         return false;
     }
 
@@ -147,6 +158,7 @@ void FShader::SetMat3(const std::string& Name, const float* Matrix) const
 
 void FShader::Destroy()
 {
+    UniformLocations.clear();
 
     if (ProgramID != 0)
     {
@@ -172,16 +184,22 @@ void FShader::Destroy()
 GLuint FShader::CompileShader(GLenum ShaderType, const std::string& Source)
 {
     GLuint shader = glCreateShader(ShaderType);
+    if (shader == 0)
+    {
+        LOGE("CompileShader", "Failed to allocate shader of type: %u", ShaderType);
+        return 0;
+    }
+
     const char* sourceCStr = Source.c_str();
     glShaderSource(shader, 1, &sourceCStr, nullptr);
     glCompileShader(shader);
 
-    GLint success;
+    GLint success = GL_FALSE;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success)
     {
-        char infoLog[512];
-        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
+        char infoLog[kShaderInfoLogCapacity] = {};
+        glGetShaderInfoLog(shader, kShaderInfoLogCapacity, nullptr, infoLog);
         LOGE("CompileShader", "Shader compilation failed, InfoLog: %s", infoLog);
         glDeleteShader(shader);
         return 0;
@@ -196,5 +214,15 @@ GLint FShader::GetUniformLocation(const std::string& Name) const
     {
         return -1;
     }
-    return glGetUniformLocation(ProgramID, Name.c_str());
+
+    const auto found = UniformLocations.find(Name);
+    if (found != UniformLocations.end())
+    {
+        return found->second;
+    }
+
+    // 不存在或被 GLSL 优化掉的 uniform（-1）也缓存，避免每帧重复查询驱动。
+    const GLint location = glGetUniformLocation(ProgramID, Name.c_str());
+    UniformLocations.emplace(Name, location);
+    return location;
 }

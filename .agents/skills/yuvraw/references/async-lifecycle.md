@@ -62,6 +62,8 @@
 
 关闭阶段日志会记录上述分段累计耗时。改动任何全局单例或 GL 资源所有权时，必须同步核对这条顺序。
 
+FRenderer 的初始化失败路径也必须清理已创建的 ImGui Context 和后端。Shutdown 根据两个 BackendUserData 是否存在分别释放后端，不能仅检查最终的 bIsInitialized；io.IniFilename 借用的路径字符串必须等 Context 销毁后才能清空。
+
 ## 后台任务与忙碌遮罩
 
 **计算差值和导出跑在工作线程上**，由 `FAsyncJob`（`Core/FAsyncJob.h`）承载：

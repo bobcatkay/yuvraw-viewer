@@ -82,8 +82,14 @@ void FComparePanel::Render()
     ImGui::PushStyleColor(ImGuiCol_TabSelectedOverline, selectedTabColor);
     ImGui::PushStyleColor(ImGuiCol_TabDimmedSelected, selectedTabColor);
     ImGui::PushStyleColor(ImGuiCol_TabDimmedSelectedOverline, selectedTabColor);
-    ImGui::Begin(FLocalization::WindowTitle(EUiText::Compare));
+    const bool bVisible = ImGui::Begin(FLocalization::WindowTitle(EUiText::Compare));
     ImGui::PopStyleColor(kPanelTabStyleColorCount);
+
+    if (!bVisible)
+    {
+        ImGui::End();
+        return;
+    }
 
     // --- 主图信息 ---
     ImGui::Text(FLocalization::Text(EUiText::MainImage));

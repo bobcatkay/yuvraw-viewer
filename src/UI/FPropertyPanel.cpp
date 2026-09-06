@@ -215,8 +215,16 @@ void FPropertyPanel::Render()
     ImGui::PushStyleColor(ImGuiCol_TabSelectedOverline, selectedTabColor);
     ImGui::PushStyleColor(ImGuiCol_TabDimmedSelected, selectedTabColor);
     ImGui::PushStyleColor(ImGuiCol_TabDimmedSelectedOverline, selectedTabColor);
-    ImGui::Begin(FLocalization::WindowTitle(EUiText::Properties));
+    const bool bVisible = ImGui::Begin(FLocalization::WindowTitle(EUiText::Properties));
     ImGui::PopStyleColor(kPanelTabStyleColorCount);
+
+    if (!bVisible)
+    {
+        // 预设模态弹窗使用本窗口的 ID 栈，宿主隐藏时仍需维护其生命周期。
+        RenderFormatPresetPopup();
+        ImGui::End();
+        return;
+    }
 
     RenderTargetSelector();
     RenderImageInfo();

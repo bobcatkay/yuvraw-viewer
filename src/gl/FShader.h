@@ -2,6 +2,7 @@
 
 #include <glad/glad.h>
 #include <string>
+#include <unordered_map>
 
 /**
  * OpenGL着色器程序封装类
@@ -11,6 +12,9 @@ class FShader
 public:
     FShader();
     ~FShader();
+
+    FShader(const FShader&) = delete;
+    FShader& operator=(const FShader&) = delete;
 
     /**
      * 从源码创建着色器程序
@@ -59,4 +63,6 @@ private:
     GLuint ProgramID;
     GLuint VertexShaderID;
     GLuint FragmentShaderID;
+    // uniform 地址仅在同一已链接程序内稳定，Destroy/重建时必须失效。
+    mutable std::unordered_map<std::string, GLint> UniformLocations;
 };

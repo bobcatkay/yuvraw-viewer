@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <string>
 
 class FWindow;
 class FRenderer;
@@ -51,7 +50,4 @@ private:
     std::unique_ptr<FMainDockSpace> MainDockSpace;
 
     bool bIsInitialized;
-    bool bShouldClose;
-
-    static FApplication* Instance;
 };

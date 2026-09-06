@@ -2,10 +2,7 @@
 
 #include <memory>
 #include <unordered_map>
-#include "Image/FImageData.h"
-
-// Forward declaration
-class FShader;
+#include "Image/FImageFormat.h"
 
 // Forward declaration
 class FShader;
@@ -52,6 +49,6 @@ private:
      */
     std::unique_ptr<FShader> CreateShaderForFormat(EImageFormat Format);
 
-    // 着色器缓存：格式 -> 着色器
+    // 着色器缓存：格式 -> 着色器；nullptr 记住编译失败，Shutdown 后才允许重试。
     std::unordered_map<EImageFormat, std::unique_ptr<FShader>> ShaderCache;
 };
