@@ -183,10 +183,11 @@ private:
     void OnDocumentChanged(FImageDocument* ChangedDocument);
 
     /**
-     * 移除主图 / 对比图。差值图依赖两者，一并作废。
+     * 移除主图 / 对比图。关闭主图时剩余对比图转为主图；差值图依赖旧的两图，一并作废。
      */
     void ClearMainDocument();
     void ClearCompareDocument();
+    void ProcessPendingDocumentClose();
 
     /**
      * 派发上一次拖放。必须在各面板本帧渲染完之后调用，那时它们的屏幕矩形才是新的。
@@ -347,6 +348,9 @@ private:
     std::unique_ptr<FImageDocument> Document;         ///< 主图
     std::unique_ptr<FImageDocument> CompareDocument;  ///< 对比图
     std::unique_ptr<FImageDocument> DiffDocument;     ///< 差值结果
+
+    /// 关闭请求在下一帧绘制前处理，保持本帧 OpenGL 回调与属性面板借用的数据有效。
+    FImageDocument* PendingDocumentClose = nullptr;
 
     std::unique_ptr<FMenuBar> MenuBar;
     std::unique_ptr<FFileExplorer> FileExplorer;

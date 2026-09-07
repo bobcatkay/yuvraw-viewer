@@ -452,8 +452,8 @@ namespace
     }
 
     /**
-     * Windows 路径比较不区分大小写；同时统一分隔符，避免文件对话框与目录枚举
-     * 给出不同写法时丢失对比图高亮。
+     * Windows 路径比较不区分大小写；统一相对路径和分隔符，避免文件对话框、
+     * 命令行与目录枚举给出不同写法时丢失图片身份。
      */
     std::string MakeFilePathKey(const std::string& FilePath)
     {
@@ -462,7 +462,19 @@ namespace
             return {};
         }
 
-        std::string key = std::filesystem::u8path(FilePath).lexically_normal().generic_u8string();
+        std::filesystem::path path = std::filesystem::u8path(FilePath);
+
+        if (path.is_relative())
+        {
+            std::error_code ec;
+            const std::filesystem::path absolutePath = std::filesystem::absolute(path, ec);
+            if (!ec)
+            {
+                path = absolutePath;
+            }
+        }
+
+        std::string key = path.lexically_normal().generic_u8string();
 
         std::transform(
             key.begin(),
@@ -613,6 +625,11 @@ bool FFileExplorer::IsFileSelected(const std::string& FilePath) const
     return std::find(SelectedFiles.begin(), SelectedFiles.end(), FilePath) != SelectedFiles.end();
 }
 
+bool FFileExplorer::IsMainFile(const std::string& FilePath) const
+{
+    return !MainFileKey.empty() && MakeFilePathKey(FilePath) == MainFileKey;
+}
+
 bool FFileExplorer::IsCompareFile(const std::string& FilePath) const
 {
     return !CompareFileKey.empty() && MakeFilePathKey(FilePath) == CompareFileKey;
@@ -723,7 +740,9 @@ void FFileExplorer::RenderFileList()
                 FFileDialog::RevealInExplorer(filePath);
             }
 
-            if (ImGui::MenuItem(FLocalization::Text(EUiText::AddComparison)))
+            // 判断实际打开的源图，而不是多选集合；当前主图或已有对比图都无需重复添加。
+            if (!IsMainFile(filePath) && !IsCompareFile(filePath) &&
+                ImGui::MenuItem(FLocalization::Text(EUiText::AddComparison)))
             {
                 if (OnFileCompareRequested)
                 {
@@ -852,6 +871,47 @@ void FFileExplorer::SetOnFileCompareRequested(FileCompareCallback Callback)
 void FFileExplorer::SetCompareFilePath(const std::string& FilePath)
 {
     CompareFileKey = MakeFilePathKey(FilePath);
+}
+
+void FFileExplorer::SetMainFilePath(const std::string& FilePath)
+{
+    MainFileKey = MakeFilePathKey(FilePath);
+}
+
+void FFileExplorer::SelectMainFile()
+{
+    ClearSelection();
+
+    if (MainFileKey.empty())
+    {
+        return;
+    }
+
+    // 关闭请求在本帧文件浏览器渲染前处理，目录切换后的待刷新列表不能用于定位选中行。
+    if (bNeedsRefresh)
+    {
+        Refresh();
+    }
+
+    for (size_t index = 0; index < CurrentFiles.size(); ++index)
+    {
+        const std::string filePath = CurrentFiles[index].u8string();
+        if (IsMainFile(filePath))
+        {
+            // 使用目录枚举的原始写法，保证普通选中与后续 Shift 选择指向同一行。
+            SelectedFiles.assign(1, filePath);
+            SelectionAnchor = static_cast<int32_t>(index);
+            break;
+        }
+    }
+
+    LOGD("FileExplorerSelection", "Main image selection synchronized: index=%d", SelectionAnchor);
+}
+
+void FFileExplorer::ClearSelection()
+{
+    SelectedFiles.clear();
+    SelectionAnchor = -1;
 }
 
 void FFileExplorer::SetOnFileExportRequested(FileExportCallback Callback)

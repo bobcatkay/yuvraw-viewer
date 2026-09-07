@@ -29,6 +29,8 @@ namespace
 
     // 朝向图标：按钮底是深青强调色，所以图标一律白色
     constexpr ImU32 kGlyphColor = IM_COL32(255, 255, 255, 255);
+    constexpr float kCloseGlyphInsetRatio = 0.25f;
+    constexpr float kCloseGlyphStrokeRatio = 0.0625f;
 
     // 文件选中态读取选择项主题色，但保留原透明度，避免在浅色面板里淡到难以辨认。
     constexpr float kFileSelectedAlpha = 0.82f;
@@ -1015,6 +1017,17 @@ void FUiIcons::DrawViewerGlyph(ImDrawList* DrawList, EViewerGlyph Glyph, const I
             Size,
             ETileOrientation::Vertical);
         break;
+
+    case EViewerGlyph::Close:
+    {
+        const float inset = Size * kCloseGlyphInsetRatio;
+        const ImVec2 min(Pos.x + inset, Pos.y + inset);
+        const ImVec2 max(Pos.x + Size - inset, Pos.y + Size - inset);
+        const float stroke = GetNormalizedStrokeWidth(Size, kCloseGlyphStrokeRatio);
+        DrawList->AddLine(min, max, kGlyphColor, stroke);
+        DrawList->AddLine(ImVec2(min.x, max.y), ImVec2(max.x, min.y), kGlyphColor, stroke);
+        break;
+    }
     }
 }
 

@@ -85,7 +85,9 @@ namespace
     constexpr int32_t kHalfTurnQuarterSteps = 2;
     constexpr int32_t kClockwiseQuarterStep = 1;
     constexpr int32_t kCounterClockwiseQuarterStep = -1;
-    constexpr int32_t kPaneOverlayButtonCount = 4;
+    constexpr int32_t kPaneOrientationButtonCount = 4;
+    constexpr int32_t kPaneCloseButtonIndex = kPaneOrientationButtonCount;
+    constexpr int32_t kPaneOverlayButtonCount = kPaneOrientationButtonCount + 1;
     constexpr int32_t kToolbarLayoutButtonCount = 2;
     struct FPaneRect
     {
@@ -101,6 +103,52 @@ namespace
                    Point.y >= Min.y && Point.y <= Max.y;
         }
     };
+
+    struct FPaneOverlayLayout
+    {
+        FPaneRect Bounds;
+        FPaneRect OrientationGroup;
+    };
+
+    FPaneOverlayLayout MakePaneOverlayLayout(const ImVec2& PaneMin, const ImVec2& PaneMax)
+    {
+        const float buttonSize = ImGui::GetFrameHeight();
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float padding = FUiScale::Apply(kOverlayPadding);
+        const float margin = FUiScale::Apply(kOverlayMargin);
+        const float groupWidth =
+            buttonSize * static_cast<float>(kPaneOrientationButtonCount)
+            + spacing * static_cast<float>(kPaneOrientationButtonCount - 1)
+            + padding * 2.0f;
+        const float groupHeight = buttonSize + padding * 2.0f;
+        // 关闭按钮独立成块，组间距复用自适应/填充按钮的 ItemSpacing。
+        const float controlsWidth = groupWidth + spacing + groupHeight;
+
+        if (PaneMax.x - PaneMin.x < controlsWidth + margin * 2.0f ||
+            PaneMax.y - PaneMin.y < groupHeight + margin * 2.0f)
+        {
+            return { { PaneMin, PaneMin }, { PaneMin, PaneMin } };
+        }
+
+        const ImVec2 max(PaneMax.x - margin, PaneMin.y + margin + groupHeight);
+        const ImVec2 min(max.x - controlsWidth, max.y - groupHeight);
+        return { { min, max }, { min, ImVec2(min.x + groupWidth, max.y) } };
+    }
+
+    ImVec2 GetPaneOverlayButtonPosition(
+        const ImVec2& GroupMin,
+        const ImVec2& GroupMax,
+        int32_t ButtonIndex)
+    {
+        const float padding = FUiScale::Apply(kOverlayPadding);
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        return ImVec2(
+            ButtonIndex == kPaneCloseButtonIndex
+                ? GroupMax.x + spacing + padding
+                : GroupMin.x + padding
+                    + static_cast<float>(ButtonIndex) * (ImGui::GetFrameHeight() + spacing),
+            GroupMin.y + padding);
+    }
 
     bool HasValidImage(const FImageDocument* Doc)
     {
@@ -401,6 +449,7 @@ void FImageViewer::RenderOverlayVisuals()
         FUiIcons::EViewerGlyph::MirrorVertical,
         FUiIcons::EViewerGlyph::RotateClockwise,
         FUiIcons::EViewerGlyph::RotateCounterClockwise,
+        FUiIcons::EViewerGlyph::Close,
     };
 
     for (int32_t overlayIndex = 0;
@@ -516,14 +565,20 @@ void FImageViewer::RenderOverlayVisuals()
             kOverlayBackground,
             FUiScale::Apply(kOverlayRounding));
 
+        const float closeGroupSize = groupMax.y - groupMin.y;
+        const ImVec2 closeGroupMin(groupMax.x + spacing, groupMin.y);
+        overlay->AddRectFilled(
+            closeGroupMin,
+            ImVec2(closeGroupMin.x + closeGroupSize, groupMax.y),
+            kOverlayBackground,
+            FUiScale::Apply(kOverlayRounding));
+
         for (int32_t buttonIndex = 0;
              buttonIndex < kPaneOverlayButtonCount;
              ++buttonIndex)
         {
-            const ImVec2 buttonPos(
-                groupMin.x + FUiScale::Apply(kOverlayPadding)
-                    + static_cast<float>(buttonIndex) * (buttonSize + spacing),
-                groupMin.y + FUiScale::Apply(kOverlayPadding));
+            const ImVec2 buttonPos =
+                GetPaneOverlayButtonPosition(groupMin, groupMax, buttonIndex);
             const ImVec2 buttonMax(
                 buttonPos.x + buttonSize,
                 buttonPos.y + buttonSize);
@@ -1075,8 +1130,6 @@ void FImageViewer::RenderImage()
 
     const bool bTiled = IsSideBySide();
     const float dividerWidth = FUiScale::Apply(kDividerWidth);
-    const float overlayPadding = FUiScale::Apply(kOverlayPadding);
-    const float overlayMargin = FUiScale::Apply(kOverlayMargin);
 
     if (imageData->GetWidth() <= 0 || imageData->GetHeight() <= 0 ||
         canvasSize.x <= 0.0f || canvasSize.y <= 0.0f)
@@ -1108,34 +1161,9 @@ void FImageViewer::RenderImage()
         panes[1].Max = ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y);
     }
 
-    const float overlayButtonSize = ImGui::GetFrameHeight();
-    const float overlayGroupWidth =
-        overlayButtonSize * static_cast<float>(kPaneOverlayButtonCount)
-        + ImGui::GetStyle().ItemSpacing.x * static_cast<float>(kPaneOverlayButtonCount - 1)
-        + overlayPadding * 2.0f;
-    const float overlayGroupHeight = overlayButtonSize + overlayPadding * 2.0f;
-
-    auto MakeOverlayRect = [&](const FPaneRect& Pane) -> FPaneRect
-    {
-        if (Pane.Width() < overlayGroupWidth + overlayMargin * 2.0f ||
-            Pane.Height() < overlayGroupHeight + overlayMargin * 2.0f)
-        {
-            return { Pane.Min, Pane.Min };
-        }
-
-        const ImVec2 max(
-            Pane.Max.x - overlayMargin,
-            Pane.Min.y + overlayMargin + overlayGroupHeight);
-
-        return {
-            ImVec2(max.x - overlayGroupWidth, max.y - overlayGroupHeight),
-            max,
-        };
-    };
-
     const FPaneRect overlayRects[2] = {
-        MakeOverlayRect(panes[0]),
-        MakeOverlayRect(panes[1]),
+        MakePaneOverlayLayout(panes[0].Min, panes[0].Max).Bounds,
+        MakePaneOverlayLayout(panes[1].Min, panes[1].Max).Bounds,
     };
 
     // 画布允许后提交的悬浮按钮覆盖命中；同时显式排除控件矩形，
@@ -1561,29 +1589,13 @@ void FImageViewer::RenderPaneOverlay(
     }
 
     const float buttonSize = ImGui::GetFrameHeight();
-    const float spacing = ImGui::GetStyle().ItemSpacing.x;
     const float overlayPadding = FUiScale::Apply(kOverlayPadding);
     const float overlayMargin = FUiScale::Apply(kOverlayMargin);
-    const float contentWidth =
-        buttonSize * static_cast<float>(kPaneOverlayButtonCount)
-        + spacing * static_cast<float>(kPaneOverlayButtonCount - 1);
-    const float groupWidth = contentWidth + overlayPadding * 2.0f;
     const float groupHeight = buttonSize + overlayPadding * 2.0f;
-    const float paneWidth = PaneMax.x - PaneMin.x;
-    const float paneHeight = PaneMax.y - PaneMin.y;
-    const bool bCanRenderControls =
-        paneWidth >= groupWidth + overlayMargin * 2.0f
-        && paneHeight >= groupHeight + overlayMargin * 2.0f;
-    ImVec2 groupMin = PaneMin;
-    ImVec2 groupMax = PaneMin;
-
-    if (bCanRenderControls)
-    {
-        groupMax = ImVec2(
-            PaneMax.x - overlayMargin,
-            PaneMin.y + overlayMargin + groupHeight);
-        groupMin = ImVec2(groupMax.x - groupWidth, groupMax.y - groupHeight);
-    }
+    const FPaneOverlayLayout layout = MakePaneOverlayLayout(PaneMin, PaneMax);
+    const bool bCanRenderControls = layout.Bounds.Width() > 0.0f;
+    const ImVec2 groupMin = layout.OrientationGroup.Min;
+    const ImVec2 groupMax = layout.OrientationGroup.Max;
 
     FPendingPaneOverlayVisual* visual = nullptr;
 
@@ -1678,10 +1690,8 @@ void FImageViewer::RenderPaneOverlay(
             const char* Id,
             const char* Tooltip) -> bool
     {
-        const ImVec2 buttonPos(
-            groupMin.x + overlayPadding
-                + static_cast<float>(ButtonIndex) * (buttonSize + spacing),
-            groupMin.y + overlayPadding);
+        const ImVec2 buttonPos =
+            GetPaneOverlayButtonPosition(groupMin, groupMax, ButtonIndex);
 
         ImGui::SetCursorScreenPos(buttonPos);
         const bool bClicked = ImGui::InvisibleButton(Id, ImVec2(buttonSize, buttonSize));
@@ -1742,6 +1752,14 @@ void FImageViewer::RenderPaneOverlay(
             FLocalization::Text(EUiText::RotateCounterclockwise)))
     {
         RotateView(Doc, kCounterClockwiseQuarterStep);
+    }
+
+    if (OverlayButton(
+            kPaneCloseButtonIndex,
+            "##CloseImage",
+            FLocalization::Text(EUiText::CloseCurrentImage)) && OnDocumentCloseRequested)
+    {
+        OnDocumentCloseRequested(Doc);
     }
 
     ImGui::PopID();

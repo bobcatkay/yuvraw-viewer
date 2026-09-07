@@ -100,8 +100,7 @@ void FComparePanel::Render()
         OnClearMain();
     }
 
-    // 注意：清空回调会就地释放文档里的 ImageData，因此下面必须重新取一次状态。
-    // 缓存调用前的结果会在点击"×"的那一帧解引用已经变成空的 ImageData。
+    // 关闭请求由 DockSpace 在下一帧绘制前处理，当前帧继续使用完整文档。
     if (MainDocument && MainDocument->GetImageData())
     {
         const std::string name = std::filesystem::u8path(MainDocument->GetFilePath()).filename().u8string();
@@ -124,7 +123,6 @@ void FComparePanel::Render()
         OnClearCompare();
     }
 
-    // 同上：状态必须在回调之后重新取
     if (CompareDocument && CompareDocument->GetImageData())
     {
         const std::string name = std::filesystem::u8path(CompareDocument->GetFilePath()).filename().u8string();
@@ -242,7 +240,7 @@ void FComparePanel::Render()
 
     ImGui::EndDisabled();
 
-    ImGui::BeginDisabled(!bHasCompare);
+    ImGui::BeginDisabled(!bCanCompare);
 
     if (ImGui::RadioButton(FLocalization::Text(EUiText::TileImages), ViewTarget == EViewTarget::SideBySide))
     {

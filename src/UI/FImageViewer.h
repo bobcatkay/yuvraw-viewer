@@ -135,6 +135,12 @@ public:
         OnDocumentSelected = std::move(Callback);
     }
 
+    /// 请求关闭按钮所在的图片；宿主延后到下一帧释放文档，避免影响已提交的绘制回调。
+    void SetOnDocumentCloseRequested(std::function<void(FImageDocument*)> Callback)
+    {
+        OnDocumentCloseRequested = std::move(Callback);
+    }
+
     /**
      * 单图模式下在画布内点击并抬起左键时请求在主图与对比图之间切换。
      * 具体目标与属性/直方图联动由 FMainDockSpace 统一处理。
@@ -357,6 +363,7 @@ private:
     FImageDocument* SelectedDocument;
 
     std::function<void(FImageDocument*)> OnDocumentSelected;
+    std::function<void(FImageDocument*)> OnDocumentCloseRequested;
     std::function<void()> OnSingleImageSwitchRequested;
 
     bool bSingleImageSwitchEnabled;

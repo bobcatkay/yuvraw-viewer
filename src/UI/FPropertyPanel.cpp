@@ -185,7 +185,7 @@ FPropertyPanel::FPropertyPanel()
     , SelectedByteOrder(EByteOrder::LittleEndian)
     , SelectedSampleAlignment(ESampleAlignment::LeastSignificantBits)
     , Target(EPropertyTarget::Main)
-    , bCompareAvailable(false)
+    , bTargetSelectionAvailable(false)
     , bParamsEditable(true)
     , FileSize(0)
     , ImageSize(0)
@@ -262,7 +262,7 @@ void FPropertyPanel::Render()
 void FPropertyPanel::RenderTargetSelector()
 {
     // 只有一张图时没什么可选的，下拉框只会占地方
-    if (!bCompareAvailable)
+    if (!bTargetSelectionAvailable)
     {
         return;
     }

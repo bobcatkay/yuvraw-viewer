@@ -48,9 +48,9 @@ public:
     void SetTarget(EPropertyTarget InTarget) { Target = InTarget; }
 
     /**
-     * 是否存在对比图。决定要不要显示目标下拉框。
+     * 是否同时存在主图与对比图。仅有一张图时隐藏目标下拉框。
      */
-    void SetCompareAvailable(bool bAvailable) { bCompareAvailable = bAvailable; }
+    void SetTargetSelectionAvailable(bool bAvailable) { bTargetSelectionAvailable = bAvailable; }
 
     /**
      * 编辑目标改变时触发，调用方需要把新目标的参数回填进来
@@ -312,7 +312,7 @@ private:
     FDisplaySettings SelectedDisplay;
 
     EPropertyTarget Target;
-    bool bCompareAvailable;
+    bool bTargetSelectionAvailable;
 
     /// 自带文件头的格式为 false，此时格式/分辨率/stride/位深等控件置灰
     bool bParamsEditable;

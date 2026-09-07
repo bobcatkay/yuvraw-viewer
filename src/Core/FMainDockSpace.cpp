@@ -674,6 +674,10 @@ void FMainDockSpace::Initialize(GLFWwindow* MainWindow)
         SwitchSingleImageView();
     });
 
+    ImageViewer->SetOnDocumentCloseRequested([this](FImageDocument* ClosingDocument) {
+        PendingDocumentClose = ClosingDocument;
+    });
+
     ComparePanel->SetOnPickCompareFile([this](const std::string& Path) {
         OpenPickedComparePath(Path);
     });
@@ -683,20 +687,59 @@ void FMainDockSpace::Initialize(GLFWwindow* MainWindow)
     });
 
     ComparePanel->SetOnClearMain([this]() {
-        ClearMainDocument();
+        PendingDocumentClose = Document.get();
     });
 
     ComparePanel->SetOnClearCompare([this]() {
-        ClearCompareDocument();
+        PendingDocumentClose = CompareDocument.get();
     });
 
     bIsInitialized = true;
 }
 
+void FMainDockSpace::ProcessPendingDocumentClose()
+{
+    FImageDocument* closingDocument = PendingDocumentClose;
+    PendingDocumentClose = nullptr;
+
+    if (!closingDocument)
+    {
+        return;
+    }
+
+    if (closingDocument == Document.get())
+    {
+        LOGI("CloseImage", "%s", "Closing main image");
+        ClearMainDocument();
+    }
+    else if (closingDocument == CompareDocument.get())
+    {
+        LOGI("CloseImage", "%s", "Closing comparison image");
+        ClearCompareDocument();
+    }
+    else if (closingDocument == DiffDocument.get())
+    {
+        // 差值是独立的生成结果，关闭它只清除结果与统计，两个源图继续保留。
+        LOGI("CloseImage", "%s", "Closing difference image");
+        DiffDocument->Clear();
+        ComparePanel->SetStats(FCompareStats());
+        ComparePanel->SetViewTarget(EViewTarget::Main);
+    }
+    else
+    {
+        LOGW("CloseImage", "%s", "Ignoring unknown document close request");
+        return;
+    }
+
+    // 即使关闭前后仍是 Main，也要重新回填空文档，清除属性与直方图的旧数据。
+    AppliedViewTarget.reset();
+    UpdateViewTarget();
+}
+
 void FMainDockSpace::ClearMainDocument()
 {
-    if (PendingImageLoad &&
-        PendingImageLoad->Target == EImageLoadTarget::Main)
+    // 主图关闭后对比图会接管主图槽位，旧的任一加载请求都不能再按原槽位提交。
+    if (PendingImageLoad)
     {
         AsyncImageLoader.Cancel();
         ClearPendingImageLoadVisual();
@@ -705,14 +748,30 @@ void FMainDockSpace::ClearMainDocument()
     DeferredCompareLoad.reset();
 
     CacheDocumentConfiguration(Document.get());
-    Document->Clear();
+
+    if (CompareDocument->IsValid())
+    {
+        const FImageViewSettings remainingView =
+            ImageViewer->GetViewSettings(CompareDocument.get());
+        Document->TakeContentFrom(*CompareDocument);
+        ImageViewer->SetViewSettings(Document.get(), remainingView);
+        ImageViewer->SetViewSettings(CompareDocument.get(), FImageViewSettings{});
+        LOGI("CloseImage", "%s", "Promoted remaining comparison image to main image");
+    }
+    else
+    {
+        Document->Clear();
+        CompareDocument->Clear();
+    }
+
+    FileExplorer->SetMainFilePath(Document->GetFilePath());
+    FileExplorer->SetCompareFilePath("");
+    FileExplorer->SelectMainFile();
 
     // 差值图是拿主图算出来的，主图没了它就失去意义
     DiffDocument->Clear();
     ComparePanel->SetStats(FCompareStats());
     ComparePanel->SetViewTarget(EViewTarget::Main);
-
-    SyncPanelFromDocument();
 }
 
 void FMainDockSpace::ClearCompareDocument()
@@ -734,11 +793,6 @@ void FMainDockSpace::ClearCompareDocument()
     DiffDocument->Clear();
     ComparePanel->SetStats(FCompareStats());
     ComparePanel->SetViewTarget(EViewTarget::Main);
-
-    // 面板可能正在编辑对比图，得先切回主图再回填
-    PropertyPanel->SetTarget(EPropertyTarget::Main);
-
-    SyncPanelFromDocument();
 }
 
 void FMainDockSpace::HandleDroppedPaths(const std::vector<std::string>& Paths, float CursorX, float CursorY)
@@ -1172,6 +1226,10 @@ void FMainDockSpace::CompleteImageLoad(FImageLoadResult Result)
         if (pending.Target == EImageLoadTarget::Compare)
         {
             FileExplorer->SetCompareFilePath(Result.FilePath);
+        }
+        else
+        {
+            FileExplorer->SetMainFilePath(Result.FilePath);
         }
 
         // 请求入队时已拍下文件选择发生时的查看目标。主图在平铺模式下换代时
@@ -1790,7 +1848,9 @@ void FMainDockSpace::SyncPanelFromDocument()
     // 自带文件头的格式参数不可改；失败原因与文件/图像大小则用来解释"为什么改了没生效"
     PropertyPanel->SetParamsEditable(!target->IsSelfDescribing());
     PropertyPanel->SetLoadError(target->GetLastError());
-    PropertyPanel->SetFileInfo(target->GetFileSize(), target->GetImageSize());
+    PropertyPanel->SetFileInfo(
+        target->GetFileSize(),
+        target->GetFilePath().empty() ? 0 : target->GetImageSize());
     PropertyPanel->SetSourceFile(target->GetFilePath());
 
     RebuildHistogram();
@@ -2333,6 +2393,14 @@ void FMainDockSpace::UpdateViewTarget()
     const bool bHasCompare =
         CompareDocument && CompareDocument->GetImageData() &&
         CompareDocument->GetImageData()->IsValid();
+    PropertyPanel->SetTargetSelectionAvailable(bHasMain && bHasCompare);
+
+    if (!bHasCompare && PropertyPanel->GetTarget() == EPropertyTarget::Compare)
+    {
+        PropertyPanel->SetTarget(EPropertyTarget::Main);
+        SyncPanelFromDocument();
+    }
+
     FImageDocument* primary = Document.get();
     FImageDocument* secondary = nullptr;
     FImageDocument* singleImageComparePeer = nullptr;
@@ -3224,6 +3292,8 @@ void FMainDockSpace::Render()
     // 图片解码线程可以继续工作，准备好的结果在这里最多多等几帧，不会阻塞 UI。
     if (!bBusy)
     {
+        // 上一帧的绘制已完成；先取消被关闭槽位的加载，再接受其它加载结果。
+        ProcessPendingDocumentClose();
         PollImageLoad();
     }
 
@@ -3283,18 +3353,6 @@ void FMainDockSpace::Render()
     {
         SetupDockSpace();
     }
-
-    // 对比图存在时属性面板才给出"编辑对象"下拉框。
-    // 对比图被移除而面板还停在它上面时，先切回主图并回填，否则面板会显示一份已经不存在的参数。
-    const bool bHasCompare = CompareDocument && CompareDocument->GetImageData();
-
-    if (!bHasCompare && PropertyPanel->GetTarget() == EPropertyTarget::Compare)
-    {
-        PropertyPanel->SetTarget(EPropertyTarget::Main);
-        SyncPanelFromDocument();
-    }
-
-    PropertyPanel->SetCompareAvailable(bHasCompare);
 
     UpdateViewTarget();
 

@@ -67,6 +67,12 @@ public:
     void Clear();
 
     /**
+     * 接管另一固定槽位的完整内容并清空来源，不重新解码或上传纹理。
+     * 两个槽位的 OnChanged 保持不变且不触发；调用方完成视图迁移后统一同步面板。
+     */
+    void TakeContentFrom(FImageDocument& Source);
+
+    /**
      * 更新加载参数。若参数确实发生变化且已打开文件，会自动重新加载。
      * @return 是否触发了重新加载
      */

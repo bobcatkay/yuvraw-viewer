@@ -54,6 +54,15 @@ public:
      */
     void SetCompareFilePath(const std::string& FilePath);
 
+    /// 记录实际显示的主图路径，供右键菜单判断；不修改用户的多选集合。
+    void SetMainFilePath(const std::string& FilePath);
+
+    /// 对比图转为主图后，在当前目录中同步普通选中与 Shift 锚点。
+    void SelectMainFile();
+
+    /// 清除普通选中与 Shift 锚点，不修改打开图片的身份标记。
+    void ClearSelection();
+
     /**
      * 设置"导出"回调（文件右键菜单）。参数是当前选中的全部文件，支持批量
      */
@@ -82,6 +91,7 @@ private:
     void RenderFileList();
 
     bool IsFileSelected(const std::string& FilePath) const;
+    bool IsMainFile(const std::string& FilePath) const;
     bool IsCompareFile(const std::string& FilePath) const;
 
     /**
@@ -105,6 +115,9 @@ private:
 
     /// 当前选中的文件（可多选）。按点击顺序/区间顺序排列，批量导出直接用它
     std::vector<std::string> SelectedFiles;
+
+    /// 实际显示的主图路径键；多选和待加载文件不能影响当前图片的菜单判断。
+    std::string MainFileKey;
 
     /// 规范化后的对比图路径键；独立于普通选中项，保证主图和对比图可同时高亮
     std::string CompareFileKey;

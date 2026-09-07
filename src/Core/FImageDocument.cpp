@@ -189,6 +189,27 @@ void FImageDocument::Clear()
     LastError.clear();
 }
 
+void FImageDocument::TakeContentFrom(FImageDocument& Source)
+{
+    if (this == &Source)
+    {
+        return;
+    }
+
+    Clear();
+    FilePath = std::move(Source.FilePath);
+    Params = Source.Params;
+    Display = Source.Display;
+    ImageData = std::move(Source.ImageData);
+    TextureData = std::move(Source.TextureData);
+    FileSize = Source.FileSize;
+    LastError = std::move(Source.LastError);
+    Source.Clear();
+
+    // 只转移内容，保留槽位对象及回调，避免面板借用指针与异步加载目标错位。
+    LOGD("TakeDocumentContent", "%s", "Transferred image content between document slots");
+}
+
 bool FImageDocument::IsSelfDescribing() const
 {
     return !FilePath.empty() && FImageLoaderFactory::IsSelfDescribingFile(FilePath);

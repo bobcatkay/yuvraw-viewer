@@ -45,6 +45,7 @@ namespace FUiIcons
         ChainLink,              ///< 同步缩放/平移：两个斜向相扣的链环
         TileHorizontal,         ///< 水平并联：左右两个极简圆角框
         TileVertical,           ///< 垂直并联：由水平组件旋转 90° 生成
+        Close,                  ///< 关闭当前图片：两条交叉线组成的 x
     };
 
     /**
