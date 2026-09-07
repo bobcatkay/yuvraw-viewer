@@ -123,6 +123,6 @@ git push origin v0.0.24
 
 请将 `0.0.24` 换成待发布版本。tag 推送后，无需本地编译或手动发布：GitHub 使用 Visual Studio 2026 构建 Debug 和 Release x64，执行现有回归测试及发行包校验，然后自动生成发布说明并发布正式 Release，附上前述三份文件。构建或校验失败时不会发布。实际 GPU/HDR 与无开发环境机器的验收仍按前文手动完成。
 
-发布任务使用 GitHub 自动提供的 `GITHUB_TOKEN`，并仅为该任务声明 `contents: write`；无需个人访问令牌或额外仓库 Secret。仓库或组织策略须允许 Actions 及该权限。普通分支 push、PR 和手动运行工作流保持原有构建行为，不会发布 Release；只有推送版本 tag 才会发布，暂不支持 `-rc.1` 等预发布后缀。
+发布任务使用 GitHub 自动提供的 `GITHUB_TOKEN`，并仅为该任务声明 `contents: write`；无需个人访问令牌或额外仓库 Secret。仓库或组织策略须允许 Actions 及该权限。整个工作流仅在推送版本 tag 时运行：普通分支 push、PR 不触发编译、打包或发布，也不启用手动运行入口。普通提交无需添加 `[skip ci]`。版本 tag 必须使用 `v主版本.次版本.修订号` 格式，暂不支持 `-rc.1` 等预发布后缀。
 
 在仓库 **Actions → Windows** 查看进度，完成后到 **Releases** 下载。附件先上传到草稿，齐全后自动公开，无需人工确认草稿。上传失败时，在原 tag 的运行记录中选择 **Re-run failed jobs** 可继续完成草稿；已公开的 Release 不会被覆盖。若需要修改源码，请使用新版本和新 tag，不要移动已发布的 tag。

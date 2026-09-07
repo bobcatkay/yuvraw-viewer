@@ -19,6 +19,6 @@ Register new source files in `.vcxproj` / `.filters` and source-package inputs. 
 - Address one clear problem per PR. Document final behavior and remove obsolete approaches.
 - Report test outcomes and reasons for `PASS` / `FAIL` / `SKIP`. Missing GPUs, codecs, or real fixtures must not be reported as passing.
 - Dependency updates must synchronize manifests, source locks, recipes/patches, licenses, SBOM, and corresponding-source delivery; rerun DNG, color, and export regressions.
-- Keep the branch up to date, pass the Debug and Release CI checks, and resolve review discussions before merging.
+- Keep the branch up to date and resolve review discussions before merging. Ordinary branch pushes and PRs do not trigger CI; pushing a version tag runs the full Debug/Release checks, packaging, and publication workflow.
 
 By contributing, you confirm that you may publish the content and agree to distribute project-owned contributions under `GPL-3.0-only`. Preserve the origins and licenses of third-party code and check compatibility before adding it. Report security issues according to [SECURITY.md](SECURITY.md).
