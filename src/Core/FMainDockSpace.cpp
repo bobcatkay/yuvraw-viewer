@@ -48,6 +48,11 @@ namespace
     constexpr float kUsageGuidePopupHeight = 600.0f;
     constexpr float kUsageGuideCloseButtonWidth = 88.0f;
     constexpr int32_t kUsageGuideStyleVarCount = 3;
+    constexpr float kFeedbackPopupWidth = 560.0f;
+    constexpr float kFeedbackPopupHeight = 300.0f;
+    constexpr float kFeedbackButtonWidth = 160.0f;
+    constexpr float kFeedbackFailureToastSeconds = 4.0f;
+    constexpr int32_t kFeedbackStyleVarCount = 3;
     constexpr float kThirdPartyPopupWidth = 720.0f;
     constexpr float kThirdPartyPopupHeight = 560.0f;
     constexpr float kPopupViewportMargin = 24.0f;
@@ -80,7 +85,7 @@ namespace
     constexpr float kSettingsThemeEditorReservedHeight = 160.0f;
     constexpr float kSettingsThemeColorListWidth = 230.0f;
     constexpr float kSettingsThemeColorListWidthRatio = 0.5f;
-    constexpr float kSettingsThemePickerMaximumWidth = 220.0f;
+    constexpr float kSettingsThemePickerVerticalMarginRatio = 0.2f;
     constexpr float kSettingsThemeColorSwatchWidth = 30.0f;
     constexpr float kSettingsThemeColorSwatchHeight = 22.0f;
     constexpr float kSettingsThemeRowTextAlignment = 0.5f;
@@ -432,6 +437,7 @@ FMainDockSpace::FMainDockSpace()
     , bWantsToClose(false)
     , bRequestAboutPopup(false)
     , bRequestUsageGuidePopup(false)
+    , bRequestFeedbackPopup(false)
     , bRequestSettingsPopup(false)
     , bSkipActiveImageConfigOnShutdown(false)
     , SettingsCacheCapacityDraft(static_cast<int32_t>(ImageConfigCache.GetCapacity()))
@@ -609,6 +615,11 @@ void FMainDockSpace::Initialize(GLFWwindow* MainWindow)
     MenuBar->SetOnUsageGuide([this]() {
         LOGI("UsageGuide", "Opening usage guide dialog");
         bRequestUsageGuidePopup = true;
+    });
+
+    MenuBar->SetOnFeedback([this]() {
+        LOGI("Feedback", "Opening feedback dialog");
+        bRequestFeedbackPopup = true;
     });
 
     MenuBar->SetOnAbout([this]() {
@@ -2703,8 +2714,7 @@ void FMainDockSpace::RenderThemeSettings()
         if (ImGui::BeginTable(
                 "##ThemeColorRows",
                 kSettingsThemeColorTableColumnCount,
-                ImGuiTableFlags_SizingStretchProp |
-                    ImGuiTableFlags_RowBg))
+                ImGuiTableFlags_SizingStretchProp))
         {
             ImGui::TableSetupColumn(
                 "##ThemeColorName",
@@ -2726,14 +2736,16 @@ void FMainDockSpace::RenderThemeSettings()
                 ImGui::TableNextRow(ImGuiTableRowFlags_None, rowHeight);
                 ImGui::TableSetColumnIndex(0);
 
+                // 禁止 Selectable 向外扩展半个 ItemSpacing，背景严格限于标题列和统一行高。
+                const float labelWidth = std::max(1.0f, ImGui::GetContentRegionAvail().x);
                 ImGui::PushStyleVar(
                     ImGuiStyleVar_SelectableTextAlign,
                     ImVec2(0.0f, kSettingsThemeRowTextAlignment));
                 if (ImGui::Selectable(
                         FLocalization::Text(definition.Label),
                         SettingsThemeSelectedRole == definition.Role,
-                        ImGuiSelectableFlags_None,
-                        ImVec2(0.0f, rowHeight)))
+                        ImGuiSelectableFlags_NoPadWithHalfSpacing,
+                        ImVec2(labelWidth, rowHeight)))
                 {
                     SelectThemeColorRole(definition.Role);
                 }
@@ -2777,31 +2789,34 @@ void FMainDockSpace::RenderThemeSettings()
 
     ImGui::SameLine();
 
+    // 仅缩小取色器编辑区的上下内边距，左侧列表与设置页其它区域保持各自的布局。
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_WindowPadding,
+        ImVec2(style.WindowPadding.x,
+            style.WindowPadding.y * kSettingsThemePickerVerticalMarginRatio));
     if (ImGui::BeginChild(
             "##ThemeColorEditor",
             ImVec2(0.0f, editorHeight),
             ImGuiChildFlags_Borders))
     {
         const ImVec2 pickerAvailable = ImGui::GetContentRegionAvail();
-        const float pickerWidth = FThemeColorPicker::CalculateFittingWidth(
-            FUiScale::Apply(kSettingsThemePickerMaximumWidth),
-            pickerAvailable.x,
-            pickerAvailable.y);
-        const float pickerOffset = std::max(
-            0.0f,
-            (pickerAvailable.x - pickerWidth) * 0.5f);
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pickerOffset);
+        const ImVec2 pickerSize = FThemeColorPicker::CalculateFittingSize(pickerAvailable);
+        const ImVec2 pickerOrigin = ImGui::GetCursorPos();
+        ImGui::SetCursorPos(ImVec2(
+            pickerOrigin.x + std::max(0.0f, (pickerAvailable.x - pickerSize.x) / 2.0f),
+            pickerOrigin.y + std::max(0.0f, (pickerAvailable.y - pickerSize.y) / 2.0f)));
 
-        if (FThemeColorPicker::Render(
+        if (pickerSize.x > 0.0f && FThemeColorPicker::Render(
                 "ThemeColorPicker",
                 SettingsThemePaletteDraft.Get(SettingsThemeSelectedRole),
                 SettingsThemePickerState,
-                pickerWidth))
+                pickerSize.x))
         {
             FUiTheme::SetPalette(SettingsThemePaletteDraft);
         }
     }
     ImGui::EndChild();
+    ImGui::PopStyleVar();
 }
 
 void FMainDockSpace::RenderSettingsPopup()
@@ -3179,6 +3194,100 @@ void FMainDockSpace::RenderUsageGuidePopup()
     ImGui::PopStyleVar(kUsageGuideStyleVarCount);
 }
 
+void FMainDockSpace::RenderFeedbackPopup()
+{
+    const bool bOpening = bRequestFeedbackPopup;
+    if (bOpening)
+    {
+        // 菜单回调只置位，确保 OpenPopup 与 BeginPopupModal 使用同一个 ID 栈。
+        ImGui::OpenPopup(FLocalization::WindowTitle(EUiText::FeedbackPopup));
+        bRequestFeedbackPopup = false;
+    }
+
+    ConfigureNextPopup(
+        ImGui::GetMainViewport(), kFeedbackPopupWidth, kFeedbackPopupHeight);
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_WindowPadding,
+        FUiScale::Apply(kAboutHorizontalPadding, kAboutVerticalPadding));
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_PopupRounding, FUiScale::Apply(kAboutPopupRounding));
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_FramePadding,
+        FUiScale::Apply(kAboutFrameHorizontalPadding, kAboutFrameVerticalPadding));
+
+    bool bOpen = true;
+    if (!ImGui::BeginPopupModal(
+            FLocalization::WindowTitle(EUiText::FeedbackPopup),
+            &bOpen,
+            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings))
+    {
+        ImGui::PopStyleVar(kFeedbackStyleVarCount);
+        return;
+    }
+
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const char* logsLabel = FLocalization::Text(EUiText::OpenLogDirectory);
+    const char* feedbackLabel = FLocalization::Text(EUiText::Feedback);
+    const float buttonWidth = std::max(
+        FUiScale::Apply(kFeedbackButtonWidth),
+        std::max(ImGui::CalcTextSize(logsLabel).x, ImGui::CalcTextSize(feedbackLabel).x)
+            + style.FramePadding.x * 2.0f);
+    const float availableWidth = ImGui::GetContentRegionAvail().x;
+    const bool bStackButtons = buttonWidth * 2.0f + style.ItemSpacing.x > availableWidth;
+    const float buttonRows = bStackButtons ? 2.0f : 1.0f;
+    const float footerHeight = ImGui::GetFrameHeightWithSpacing() * buttonRows;
+
+    // 正文独立滚动，按钮整体右对齐并固定在底部；窄窗口中纵向排列，避免超出边界。
+    if (ImGui::BeginChild("##FeedbackBody", ImVec2(0.0f, -footerHeight)))
+    {
+        if (bOpening)
+        {
+            ImGui::SetScrollY(0.0f);
+        }
+        ImGui::Text(FLocalization::Text(EUiText::AppVersion), FAppVersion::String);
+        ImGui::Spacing();
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextUnformatted(FLocalization::Text(EUiText::FeedbackUploadLogsHint));
+        ImGui::PopTextWrapPos();
+    }
+    ImGui::EndChild();
+
+    const float actualButtonWidth = std::min(buttonWidth, availableWidth);
+    const float buttonGroupWidth = bStackButtons
+        ? actualButtonWidth : actualButtonWidth * 2.0f + style.ItemSpacing.x;
+    const float buttonStartX = ImGui::GetCursorPosX()
+        + std::max(0.0f, availableWidth - buttonGroupWidth);
+    const ImVec2 buttonSize(actualButtonWidth, 0.0f);
+    ImGui::SetCursorPosX(buttonStartX);
+    if (CenteredTextButton(logsLabel, buttonSize) && !FFileDialog::OpenLogDirectory())
+    {
+        FToast::Show(
+            FLocalization::Text(EUiText::LogDirectoryOpenFailed),
+            kFeedbackFailureToastSeconds);
+    }
+    if (!bStackButtons)
+    {
+        ImGui::SameLine();
+    }
+    else
+    {
+        ImGui::SetCursorPosX(buttonStartX);
+    }
+    if (CenteredTextButton(feedbackLabel, buttonSize) && !FFileDialog::OpenProjectIssue())
+    {
+        FToast::Show(
+            FLocalization::Text(EUiText::ProjectIssueOpenFailed),
+            kFeedbackFailureToastSeconds);
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+    {
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+    ImGui::PopStyleVar(kFeedbackStyleVarCount);
+}
+
 void FMainDockSpace::RenderAboutPopup()
 {
     if (bRequestAboutPopup)
@@ -3489,6 +3598,7 @@ void FMainDockSpace::Render()
     ExportPanel->Render();
     RenderSettingsPopup();
     RenderUsageGuidePopup();
+    RenderFeedbackPopup();
     RenderAboutPopup();
 
     // 此时各面板窗口已经存在，可以只切换 Dock 标签而不抢走文件浏览器的键盘焦点。

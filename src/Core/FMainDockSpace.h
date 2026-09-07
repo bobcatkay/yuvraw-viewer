@@ -294,6 +294,9 @@ private:
     /** 渲染可滚动的使用说明弹窗，内容随界面语言切换。 */
     void RenderUsageGuidePopup();
 
+    /** 渲染反馈弹窗，提供日志目录与 GitHub Issue 入口。 */
+    void RenderFeedbackPopup();
+
     /**
      * 渲染设置模态弹窗（主题色、图片配置缓存容量与数据清理）。
      */
@@ -377,6 +380,7 @@ private:
     bool bWantsToClose;
     bool bRequestAboutPopup;
     bool bRequestUsageGuidePopup;
+    bool bRequestFeedbackPopup;
     bool bRequestSettingsPopup;
     /// 清除缓存后若用户未再切图，退出时不要把当前两张图立即塞回刚清空的缓存。
     bool bSkipActiveImageConfigOnShutdown;

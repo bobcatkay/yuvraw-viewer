@@ -35,7 +35,7 @@ namespace FLogger
     void Shutdown();
 
     /**
-     * 写入一条 printf 风格日志。
+     * 写入一条 printf 风格日志；每条记录包含统一的应用版本号。
      */
     void Write(const char* Level, const char* File, const char* Function, const char* Format, ...);
     void WriteV(const char* Level, const char* File, const char* Function, const char* Format, va_list Args);

@@ -5,6 +5,8 @@
 #include <array>
 #include <cstddef>
 
+struct ImVec2;
+
 /**
  * 设置页自绘取色器的瞬时状态。
  *
@@ -31,17 +33,14 @@ namespace FThemeColorPicker
         FThemeColorPickerState& State);
 
     /**
-     * 在首选宽度内同时适配可用宽高，避免内嵌编辑区出现滚动条。
-     * 所有参数和返回值均已按当前 DPI 换算。
+     * 按统一比例适配可用宽高，返回整个取色器的尺寸，供编辑区居中放置。
+     * 参数和返回值均已按当前 DPI 换算；空间不足时返回零尺寸。
      */
-    float CalculateFittingWidth(
-        float PreferredWidth,
-        float AvailableWidth,
-        float AvailableHeight);
+    ImVec2 CalculateFittingSize(const ImVec2& AvailableSize);
 
     /**
      * 绘制“明度/饱和度区域 + 水平色相条 + Hex 输入 + 色块”的内嵌取色器。
-     * @param Width 已按当前 DPI 换算的控件宽度。
+     * @param Width 已按当前 DPI 换算的控件宽度；所有组成部分等比缩放。
      * @return 本帧颜色是否发生有效变化。
      */
     bool Render(

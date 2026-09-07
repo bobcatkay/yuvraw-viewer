@@ -1,5 +1,6 @@
 #include "FFileDialog.h"
 #include "FLocalization.h"
+#include "FLogger.h"
 #include "Util.h"
 
 #include <windows.h>
@@ -9,6 +10,8 @@
 #include <wrl/client.h>
 
 #include <algorithm>
+#include <filesystem>
+#include <system_error>
 
 using Microsoft::WRL::ComPtr;
 
@@ -16,6 +19,8 @@ namespace
 {
     constexpr const wchar_t* kProjectReleasesUrl =
         L"https://github.com/bobcatkay/yuvraw-viewer/releases";
+    constexpr const wchar_t* kProjectIssueUrl =
+        L"https://github.com/bobcatkay/yuvraw-viewer/issues/new";
 
     /**
      * 作用域内的 COM 初始化。
@@ -127,32 +132,57 @@ namespace
 
         return !OutPath.empty();
     }
+
+    bool OpenShellTarget(const wchar_t* Target, const char* LogTag)
+    {
+        FScopedCoInitialize comInit;
+
+        // 直接传入宽字符路径或固定 HTTPS 地址，保留中文路径；失败由应用提示。
+        SHELLEXECUTEINFOW executeInfo{};
+        executeInfo.cbSize = sizeof(executeInfo);
+        executeInfo.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+        executeInfo.lpVerb = L"open";
+        executeInfo.lpFile = Target;
+        executeInfo.nShow = SW_SHOWNORMAL;
+
+        if (!ShellExecuteExW(&executeInfo))
+        {
+            const DWORD error = GetLastError();
+            LOGE(LogTag, "ShellExecuteExW failed: %lu", error);
+            return false;
+        }
+
+        LOGI(LogTag, "Shell open request accepted");
+        return true;
+    }
 }
 
 namespace FFileDialog
 {
     bool OpenProjectReleases()
     {
-        FScopedCoInitialize comInit;
         LOGI("ProjectReleases", "Opening project releases in the default browser");
+        return OpenShellTarget(kProjectReleasesUrl, "ProjectReleases");
+    }
 
-        // 直接将固定 HTTPS 地址交给 Shell，使用默认浏览器；失败由应用提示，避免额外系统弹窗。
-        SHELLEXECUTEINFOW executeInfo{};
-        executeInfo.cbSize = sizeof(executeInfo);
-        executeInfo.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
-        executeInfo.lpVerb = L"open";
-        executeInfo.lpFile = kProjectReleasesUrl;
-        executeInfo.nShow = SW_SHOWNORMAL;
+    bool OpenProjectIssue()
+    {
+        LOGI("Feedback", "Opening a new project issue in the default browser");
+        return OpenShellTarget(kProjectIssueUrl, "Feedback");
+    }
 
-        if (!ShellExecuteExW(&executeInfo))
+    bool OpenLogDirectory()
+    {
+        LOGI("Feedback", "Opening the current logs folder in File Explorer");
+        const std::filesystem::path directory = FLogger::GetLogDirectory();
+        std::error_code error;
+        if (!std::filesystem::is_directory(directory, error))
         {
-            const DWORD error = GetLastError();
-            LOGE("ProjectReleases", "ShellExecuteExW failed: %lu", error);
+            LOGE("Feedback", "Logs folder is missing or inaccessible (error=%d)", error.value());
             return false;
         }
 
-        LOGI("ProjectReleases", "Project releases browser request accepted");
-        return true;
+        return OpenShellTarget(directory.c_str(), "Feedback");
     }
 
     bool OpenFile(const std::string& Title, const std::vector<std::string>& Extensions, std::string& OutPath)

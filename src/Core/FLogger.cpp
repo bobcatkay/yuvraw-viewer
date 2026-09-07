@@ -1,4 +1,5 @@
 #include "FLogger.h"
+#include "FAppVersion.h"
 
 #include <Windows.h>
 
@@ -397,6 +398,9 @@ namespace
         line += timestamp.data();
         line += "] [";
         line += Level ? Level : "UNKNOWN";
+        // 每条记录都保留版本，滚动日志或用户截取的片段也能定位对应构建。
+        line += "] [YUVRaw ";
+        line += FAppVersion::String;
         line += "] ";
         line += File ? File : "<unknown>";
         line += ":";

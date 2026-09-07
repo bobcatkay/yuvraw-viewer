@@ -41,4 +41,10 @@ namespace FFileDialog
 
     /** 用默认浏览器打开项目 Releases 页面；Shell 调用失败时返回 false。 */
     bool OpenProjectReleases();
+
+    /** 用默认浏览器打开项目的新建 Issue 页面；Shell 调用失败时返回 false。 */
+    bool OpenProjectIssue();
+
+    /** 在资源管理器中打开当前日志目录；目录不可访问或 Shell 调用失败时返回 false。 */
+    bool OpenLogDirectory();
 }

@@ -89,6 +89,14 @@ void FMenuBar::RenderHelpMenu()
             }
         }
 
+        if (ImGui::MenuItem(FLocalization::Text(EUiText::Feedback)))
+        {
+            if (OnFeedback)
+            {
+                OnFeedback();
+            }
+        }
+
         if (ImGui::MenuItem(FLocalization::Text(EUiText::About)))
         {
             if (OnAbout)
@@ -133,6 +141,11 @@ void FMenuBar::SetOnSettings(MenuCallback Callback)
 void FMenuBar::SetOnUsageGuide(MenuCallback Callback)
 {
     OnUsageGuide = Callback;
+}
+
+void FMenuBar::SetOnFeedback(MenuCallback Callback)
+{
+    OnFeedback = Callback;
 }
 
 void FMenuBar::SetOnAbout(MenuCallback Callback)

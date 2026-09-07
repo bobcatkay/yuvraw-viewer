@@ -4,6 +4,7 @@
 #include "FUiTheme.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <algorithm>
 #include <array>
@@ -13,7 +14,7 @@
 
 namespace
 {
-    constexpr float kMinimumPickerWidth = 120.0f;
+    constexpr float kReferencePickerWidth = 120.0f;
     constexpr float kSaturationValueHeightRatio = 0.88f;
     constexpr float kHueBarHeight = 12.0f;
     constexpr float kSectionGap = 9.0f;
@@ -25,6 +26,7 @@ namespace
     constexpr float kMarkerLineThickness = 2.0f;
     constexpr float kBottomSwatchWidth = 40.0f;
     constexpr float kLayoutSafetyMargin = 2.0f;
+    constexpr int32_t kPickerStyleVarCount = 4;
     constexpr float kPi = 3.14159265358979323846f;
     constexpr float kHalfPi = kPi * 0.5f;
     constexpr float kTwoPi = kPi * 2.0f;
@@ -222,21 +224,21 @@ namespace
         DrawList->PathFillConvex(MaskColor);
     }
 
-    void DrawMarker(ImDrawList* DrawList, const ImVec2& Center)
+    void DrawMarker(ImDrawList* DrawList, const ImVec2& Center, float Scale)
     {
-        const float markerRadius = FUiScale::Apply(kMarkerRadius);
+        const float markerRadius = FUiScale::Apply(kMarkerRadius) * Scale;
         DrawList->AddCircle(
             Center,
             markerRadius,
             IM_COL32(0, 0, 0, 150),
             0,
-            FUiScale::Apply(kMarkerShadowThickness));
+            FUiScale::Apply(kMarkerShadowThickness) * Scale);
         DrawList->AddCircle(
             Center,
             markerRadius,
             IM_COL32(255, 255, 255, 255),
             0,
-            FUiScale::Apply(kMarkerLineThickness));
+            FUiScale::Apply(kMarkerLineThickness) * Scale);
     }
 }
 
@@ -248,26 +250,16 @@ void FThemeColorPicker::Synchronize(
     FormatHexColor(Color, State);
 }
 
-float FThemeColorPicker::CalculateFittingWidth(
-    float PreferredWidth,
-    float AvailableWidth,
-    float AvailableHeight)
+ImVec2 FThemeColorPicker::CalculateFittingSize(const ImVec2& AvailableSize)
 {
-    const float minimumWidth = FUiScale::Apply(kMinimumPickerWidth);
-    const float fixedHeight = FUiScale::Apply(
-            kHueBarHeight + kSectionGap * 2.0f + kLayoutSafetyMargin)
+    const float referenceWidth = FUiScale::Apply(kReferencePickerWidth);
+    const float referenceHeight = referenceWidth * kSaturationValueHeightRatio
+        + FUiScale::Apply(kHueBarHeight + kSectionGap * 2.0f)
         + ImGui::GetFrameHeight();
-    const float heightLimitedWidth = std::max(
-        minimumWidth,
-        (AvailableHeight - fixedHeight) / kSaturationValueHeightRatio);
-
-    return std::max(
-        minimumWidth,
-        std::min({
-            PreferredWidth,
-            AvailableWidth,
-            heightLimitedWidth,
-        }));
+    const float scale = std::max(0.0f, std::min(
+        AvailableSize.x / referenceWidth,
+        (AvailableSize.y - FUiScale::Apply(kLayoutSafetyMargin)) / referenceHeight));
+    return ImVec2(referenceWidth * scale, referenceHeight * scale);
 }
 
 bool FThemeColorPicker::Render(
@@ -276,6 +268,11 @@ bool FThemeColorPicker::Render(
     FThemeColorPickerState& State,
     float Width)
 {
+    if (Width <= 0.0f)
+    {
+        return false;
+    }
+
     if (!State.bInitialized || State.LastColor != Color)
     {
         Synchronize(Color, State);
@@ -283,14 +280,24 @@ bool FThemeColorPicker::Render(
 
     ImGui::PushID(Id);
 
+    // 整个控件使用同一比例，不能只拉大饱和度区域；局部字体和样式在返回前恢复。
+    const float pickerScale = Width / FUiScale::Apply(kReferencePickerWidth);
+    const float previousFontScale = ImGui::GetCurrentWindow()->FontWindowScale;
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+        ImVec2(style.FramePadding.x * pickerScale, style.FramePadding.y * pickerScale));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+        ImVec2(style.ItemSpacing.x * pickerScale, style.ItemSpacing.y * pickerScale));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding * pickerScale);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, style.FrameBorderSize * pickerScale);
+    ImGui::SetWindowFontScale(previousFontScale * pickerScale);
+
     bool bChanged = false;
-    const float pickerWidth = std::max(
-        FUiScale::Apply(kMinimumPickerWidth),
-        Width);
+    const float pickerWidth = Width;
     const float saturationValueHeight =
         pickerWidth * kSaturationValueHeightRatio;
-    const float hueBarHeight = FUiScale::Apply(kHueBarHeight);
-    const float sectionGap = FUiScale::Apply(kSectionGap);
+    const float hueBarHeight = FUiScale::Apply(kHueBarHeight) * pickerScale;
+    const float sectionGap = FUiScale::Apply(kSectionGap) * pickerScale;
     const ImU32 borderColor = ImGui::GetColorU32(ImGuiCol_Border);
     ImVec4 maskColorValue = ImGui::GetStyleColorVec4(ImGuiCol_PopupBg);
     maskColorValue.w = 1.0f;
@@ -344,7 +351,7 @@ bool FThemeColorPicker::Render(
         IM_COL32(0, 0, 0, 255),
         IM_COL32(0, 0, 0, 255));
     const float saturationValueRounding =
-        FUiScale::Apply(kSaturationValueRounding);
+        FUiScale::Apply(kSaturationValueRounding) * pickerScale;
     MaskRoundedCorners(
         drawList,
         saturationValueMin,
@@ -357,8 +364,8 @@ bool FThemeColorPicker::Render(
         borderColor,
         saturationValueRounding,
         ImDrawFlags_RoundCornersAll,
-        FUiScale::Apply(kPickerBorderThickness));
-    const float markerRadius = FUiScale::Apply(kMarkerRadius);
+        FUiScale::Apply(kPickerBorderThickness) * pickerScale);
+    const float markerRadius = FUiScale::Apply(kMarkerRadius) * pickerScale;
     DrawMarker(
         drawList,
         ImVec2(
@@ -370,7 +377,8 @@ bool FThemeColorPicker::Render(
                 saturationValueMin.y +
                     (1.0f - State.Value) * saturationValueHeight,
                 saturationValueMin.y + markerRadius,
-                saturationValueMax.y - markerRadius)));
+                saturationValueMax.y - markerRadius)),
+        pickerScale);
 
     const ImVec2 hueMin(
         saturationValueMin.x,
@@ -412,7 +420,7 @@ bool FThemeColorPicker::Render(
             kHueColors[stopIndex]);
     }
 
-    const float hueBarRounding = FUiScale::Apply(kHueBarRounding);
+    const float hueBarRounding = FUiScale::Apply(kHueBarRounding) * pickerScale;
     MaskRoundedCorners(
         drawList,
         hueMin,
@@ -425,7 +433,7 @@ bool FThemeColorPicker::Render(
         borderColor,
         hueBarRounding,
         ImDrawFlags_RoundCornersAll,
-        FUiScale::Apply(kPickerBorderThickness));
+        FUiScale::Apply(kPickerBorderThickness) * pickerScale);
     DrawMarker(
         drawList,
         ImVec2(
@@ -433,10 +441,11 @@ bool FThemeColorPicker::Render(
                 hueMin.x + State.Hue * pickerWidth,
                 hueMin.x + markerRadius,
                 hueMax.x - markerRadius),
-            (hueMin.y + hueMax.y) * 0.5f));
+            (hueMin.y + hueMax.y) * 0.5f),
+        pickerScale);
 
     ImGui::SetCursorScreenPos(ImVec2(hueMin.x, hueMax.y + sectionGap));
-    const float swatchWidth = FUiScale::Apply(kBottomSwatchWidth);
+    const float swatchWidth = FUiScale::Apply(kBottomSwatchWidth) * pickerScale;
     const float hexInputWidth = std::max(
         1.0f,
         pickerWidth - swatchWidth - ImGui::GetStyle().ItemSpacing.x);
@@ -477,6 +486,8 @@ bool FThemeColorPicker::Render(
         ImVec2(swatchWidth, ImGui::GetFrameHeight()));
 
     State.LastColor = Color;
+    ImGui::SetWindowFontScale(previousFontScale);
+    ImGui::PopStyleVar(kPickerStyleVarCount);
     ImGui::PopID();
     return bChanged;
 }
