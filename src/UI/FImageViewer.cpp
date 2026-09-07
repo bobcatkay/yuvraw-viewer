@@ -34,6 +34,10 @@
 
 namespace
 {
+    constexpr const char* kImageViewerLogTag = "ImageViewer";
+    constexpr GLsizei kQuadVertexCount = 6;
+    constexpr GLsizei kQuadVertexStride = 4 * sizeof(float); // 每个顶点含二维位置和二维纹理坐标。
+
     /// 每个滚轮 tick 的缩放倍率
     constexpr float kZoomStep = 1.1f;
     constexpr float kMinZoom = 0.02f;
@@ -325,7 +329,6 @@ FImageViewer::FImageViewer()
     , bDropRectValid(false)
     , PendingPaneOverlayVisualCount(0)
     , PendingLoadingVisualCount(0)
-    , QuadVAO(0)
     , QuadVBO(0)
     , bOpenGLResourcesInitialized(false)
 {
@@ -2104,9 +2107,20 @@ void FImageViewer::IssueDrawCallback(
         shader->SetFloat("uMaxOutputScale", pipeline.MaxOutputScale);
         shader->SetInt("uShowOutOfRange", pipeline.bShowOutOfRange);
 
-        glBindVertexArray(viewer->QuadVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-        glBindVertexArray(0);
+        // VBO 可以在共享 Context 间复用，VAO 不可以。与 ImGui OpenGL 后端一致，
+        // 在实际绘制的 Context 内创建并释放 VAO，避免脱离 Dock 后绑定主窗口的 VAO。
+        GLuint quadVAO = 0;
+        glGenVertexArrays(1, &quadVAO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, viewer->QuadVBO);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, kQuadVertexStride, nullptr);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, kQuadVertexStride,
+            reinterpret_cast<const void*>(2 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+
+        glDrawArrays(GL_TRIANGLES, 0, kQuadVertexCount);
+        glDeleteVertexArrays(1, &quadVAO);
 
         // 恢复 OpenGL 状态
         glUseProgram(lastProgram);
@@ -2422,8 +2436,8 @@ void FImageViewer::InitializeOpenGLResources()
         return;
     }
 
-    // 创建全屏四边形VAO和VBO
-    float quadVertices[] = {
+    // 只持久保存可跨 Context 共享的顶点缓冲；VAO 在绘制回调中管理。
+    const float quadVertices[] = {
         // 位置        // 纹理坐标
         -1.0f, -1.0f,  0.0f, 0.0f,
          1.0f, -1.0f,  1.0f, 0.0f,
@@ -2434,38 +2448,24 @@ void FImageViewer::InitializeOpenGLResources()
         -1.0f,  1.0f,  0.0f, 1.0f
     };
 
-    glGenVertexArrays(1, &QuadVAO);
+    GLint lastArrayBuffer = 0;
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &lastArrayBuffer);
     glGenBuffers(1, &QuadVBO);
-
-    glBindVertexArray(QuadVAO);
     glBindBuffer(GL_ARRAY_BUFFER, QuadVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-
-    // 位置属性
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    // 纹理坐标属性
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, lastArrayBuffer);
 
     bOpenGLResourcesInitialized = true;
+    LOGD(kImageViewerLogTag, "Shared image quad vertex buffer initialized");
 }
 
 void FImageViewer::DestroyOpenGLResources()
 {
-    if (QuadVAO != 0)
-    {
-        glDeleteVertexArrays(1, &QuadVAO);
-        QuadVAO = 0;
-    }
-
     if (QuadVBO != 0)
     {
         glDeleteBuffers(1, &QuadVBO);
         QuadVBO = 0;
+        LOGD(kImageViewerLogTag, "Shared image quad vertex buffer released");
     }
 
     bOpenGLResourcesInitialized = false;

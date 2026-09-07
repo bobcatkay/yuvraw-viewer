@@ -64,6 +64,7 @@ packed（YUY2/UYVY）与 Bayer 着色器**必须用 `texelFetch`**：线性过�
 3. 结束后追加 `drawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr)`
 4. **不要在回调里打日志** —— 每帧都会执行
 5. `SetMagFilterNearest` 要在 `BindTextures` **之前**调用（它内部会 glBindTexture）
+6. VBO 可跨共享 Context 复用，但 **VAO 不共享**。与 ImGui OpenGL 后端一致，在实际绘制回调中创建、配置并释放 VAO，再恢复原 VAO / array buffer；不能在查看器初始化时创建一个 VAO 供所有视口使用，否则面板脱离 Dock 成为独立窗口后图像会消失。
 
 回调 userdata 通过 `AddCallback(fn, &data, sizeof(data))` 让 ImGui 复制，不要传栈上指针。
 

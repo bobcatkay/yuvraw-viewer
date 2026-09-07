@@ -412,8 +412,7 @@ private:
 
     FPendingSingleImageHintVisual PendingSingleImageHintVisual;
 
-    // OpenGL渲染资源（VAO/VBO）
-    GLuint QuadVAO;
+    // VBO 在各视口的共享 Context 间复用；VAO 仅在绘制回调的当前 Context 内存活。
     GLuint QuadVBO;
     bool bOpenGLResourcesInitialized;
 };

@@ -121,7 +121,7 @@ git push origin main
 git push origin v0.0.24
 ```
 
-Use your intended version instead of `0.0.24`. After the tag push, no local build or manual publishing step is needed. GitHub builds Debug and Release x64 with Visual Studio 2026, runs the existing regressions and package validation, then automatically publishes a normal Release with generated release notes and all three assets listed above. A failed build or validation prevents publication. Physical GPU/HDR and clean-machine acceptance still need the manual checks described above.
+Use your intended version instead of `0.0.24`. After the tag push, no local build or manual publishing step is needed. GitHub builds only Release x64 with Visual Studio 2026, runs the existing regressions and package validation, then automatically publishes a normal Release with generated release notes and all three assets listed above. A failed build or validation prevents publication. Physical GPU/HDR and clean-machine acceptance still need the manual checks described above.
 
 The publisher uses GitHub's automatic `GITHUB_TOKEN` with job-scoped `contents: write`; no personal access token or extra repository secret is needed. Repository or organization policies must allow Actions and this permission. The entire workflow runs only when a version tag is pushed: ordinary branch pushes and pull requests do not run builds, packaging, or publication, and no manual workflow trigger is enabled. Ordinary commits do not need `[skip ci]`. Release tags must use `vMAJOR.MINOR.PATCH`; prerelease suffixes such as `-rc.1` are currently unsupported.
 

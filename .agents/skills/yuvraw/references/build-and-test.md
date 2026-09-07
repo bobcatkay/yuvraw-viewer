@@ -42,7 +42,7 @@ Visual Studio 自带的 `VC/vcpkg`。不要再把头文件、库或 DNG 测试�
 `docs/BUILDING.md`；发布前验证解压后的程序包可在无开发工具的 Windows 上运行。
 
 `.github/workflows/windows.yml` 在推送 `vMAJOR.MINOR.PATCH` tag 后自动发布 GitHub Release，
-先核对 tag 与源码版本，等待 Debug/Release 构建及现有检查全部成功，再上传三件产物并公开。
+先核对 tag 与源码版本，仅构建 Release x64，等待构建及现有检查全部成功，再上传三件产物并公开；不构建 Debug。
 CI 使用 runner 临时目录打包，保持 Actions 附件为平铺文件；本地默认输出路径不变。
 发布仅使用该 job 的 `contents: write` 权限；上传中断可重跑失败 job 继续草稿，已公开版本不覆盖。
 整个工作流仅由版本 tag push 触发；普通分支 push、PR 不构建、不打包，也不发版，
