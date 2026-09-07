@@ -11,6 +11,8 @@ A Windows x64 image viewer and format inspection tool for RGB, grayscale, YUV, B
 3. Keep `resources/fonts/` and the license files. The application loads bundled fonts relative to its executable; no font installation or fixed working directory is required.
 4. The interface defaults to **English**. In **Settings → Language**, choose **简体中文** or **English** and apply. The change takes effect immediately and persists across restarts. Existing saved preferences remain in use.
 
+**Help → Usage guide** covers shortcuts, canvas controls, comparison, and batch export. **Help → About → Latest version** opens downloads and release notes.
+
 ## Open, view, and export
 
 Use **File → Open File**, `Ctrl + O`, or drag and drop. You can also open a folder and navigate its images in the file browser. Chinese and space-containing paths are supported; quote paths on the command line. Rare Chinese characters may fall outside the current UI glyph set.

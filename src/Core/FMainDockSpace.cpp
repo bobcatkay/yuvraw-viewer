@@ -43,7 +43,11 @@ namespace
 
 
     constexpr float kAboutPopupWidth = 480.0f;
-    constexpr float kAboutPopupHeight = kAboutPopupWidth * 3.0f / 4.0f;
+    constexpr float kAboutPopupHeight = 360.0f;
+    constexpr float kUsageGuidePopupWidth = 720.0f;
+    constexpr float kUsageGuidePopupHeight = 600.0f;
+    constexpr float kUsageGuideCloseButtonWidth = 88.0f;
+    constexpr int32_t kUsageGuideStyleVarCount = 3;
     constexpr float kThirdPartyPopupWidth = 720.0f;
     constexpr float kThirdPartyPopupHeight = 560.0f;
     constexpr float kPopupViewportMargin = 24.0f;
@@ -88,15 +92,13 @@ namespace
     constexpr int32_t kCacheCapacityInputStep = 10;
     constexpr int32_t kCacheCapacityInputFastStep = 100;
     constexpr float kImageLoadFailureToastSeconds = 3.5f;
+    constexpr float kProjectReleasesFailureToastSeconds = 4.0f;
     constexpr int64_t kSlowHistogramLogMilliseconds = 16;
     constexpr int64_t kSlowHistogramLogIntervalMilliseconds = 1000;
     constexpr std::chrono::seconds kSingleImageCompareHintDuration(3);
 
     constexpr ImU32 kAboutAccentColor = IM_COL32(16, 87, 100, 255);
     constexpr ImU32 kAboutSubtitleColor = IM_COL32(92, 92, 92, 255);
-    constexpr ImU32 kAboutBadgeBackground = IM_COL32(30, 140, 148, 255);
-    constexpr ImU32 kAboutBadgeBorder = IM_COL32(16, 87, 100, 255);
-    constexpr ImU32 kAboutBadgeText = IM_COL32(255, 255, 255, 255);
     constexpr ImU32 kAboutSecondaryButton = IM_COL32(226, 232, 240, 255);
     constexpr ImU32 kAboutSecondaryButtonHovered = IM_COL32(203, 213, 225, 255);
     constexpr ImU32 kAboutSecondaryButtonActive = IM_COL32(183, 196, 211, 255);
@@ -110,6 +112,19 @@ namespace
     const ImVec4 kSettingsDangerButtonHoveredColor(0.73f, 0.10f, 0.10f, 1.0f);
     const ImVec4 kSettingsDangerButtonActiveColor(0.60f, 0.07f, 0.07f, 1.0f);
     const ImVec4 kSettingsDangerButtonTextColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+    struct FUsageGuideSection
+    {
+        EUiText Title;
+        EUiText Body;
+    };
+
+    constexpr FUsageGuideSection kUsageGuideSections[] = {
+        { EUiText::UsageGuideShortcutsTitle, EUiText::UsageGuideShortcutsBody },
+        { EUiText::UsageGuideViewTitle, EUiText::UsageGuideViewBody },
+        { EUiText::UsageGuideCompareTitle, EUiText::UsageGuideCompareBody },
+        { EUiText::UsageGuideExportTitle, EUiText::UsageGuideExportBody },
+    };
 
     struct FThemeColorUiDefinition
     {
@@ -416,6 +431,7 @@ FMainDockSpace::FMainDockSpace()
     , bIsInitialized(false)
     , bWantsToClose(false)
     , bRequestAboutPopup(false)
+    , bRequestUsageGuidePopup(false)
     , bRequestSettingsPopup(false)
     , bSkipActiveImageConfigOnShutdown(false)
     , SettingsCacheCapacityDraft(static_cast<int32_t>(ImageConfigCache.GetCapacity()))
@@ -588,6 +604,11 @@ void FMainDockSpace::Initialize(GLFWwindow* MainWindow)
 
     MenuBar->SetOnSettings([this]() {
         bRequestSettingsPopup = true;
+    });
+
+    MenuBar->SetOnUsageGuide([this]() {
+        LOGI("UsageGuide", "Opening usage guide dialog");
+        bRequestUsageGuidePopup = true;
     });
 
     MenuBar->SetOnAbout([this]() {
@@ -3088,6 +3109,76 @@ bool FMainDockSpace::ClearUiLayoutSettingsFile()
     return true;
 }
 
+void FMainDockSpace::RenderUsageGuidePopup()
+{
+    const bool bOpening = bRequestUsageGuidePopup;
+    if (bOpening)
+    {
+        // 菜单只记录请求，在此处以与 BeginPopupModal 相同的 ID 栈打开。
+        ImGui::OpenPopup(FLocalization::WindowTitle(EUiText::UsageGuidePopup));
+        bRequestUsageGuidePopup = false;
+    }
+
+    ConfigureNextPopup(
+        ImGui::GetMainViewport(), kUsageGuidePopupWidth, kUsageGuidePopupHeight);
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_WindowPadding,
+        FUiScale::Apply(kAboutHorizontalPadding, kAboutVerticalPadding));
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_PopupRounding, FUiScale::Apply(kAboutPopupRounding));
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_FramePadding,
+        FUiScale::Apply(kAboutFrameHorizontalPadding, kAboutFrameVerticalPadding));
+
+    bool bOpen = true;
+    if (!ImGui::BeginPopupModal(
+            FLocalization::WindowTitle(EUiText::UsageGuidePopup),
+            &bOpen,
+            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings))
+    {
+        ImGui::PopStyleVar(kUsageGuideStyleVarCount);
+        return;
+    }
+
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float footerHeight = ImGui::GetFrameHeight() + style.ItemSpacing.y;
+    // 长说明只在正文区域滚动，关闭按钮始终留在弹窗底部。
+    if (ImGui::BeginChild("##UsageGuideBody", ImVec2(0.0f, -footerHeight)))
+    {
+        if (bOpening)
+        {
+            ImGui::SetScrollY(0.0f);
+        }
+
+        for (const FUsageGuideSection& section : kUsageGuideSections)
+        {
+            ImGui::SeparatorText(FLocalization::Text(section.Title));
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(FLocalization::Text(section.Body));
+            ImGui::PopTextWrapPos();
+            ImGui::Spacing();
+        }
+    }
+    ImGui::EndChild();
+
+    const float closeButtonWidth = std::max(
+        FUiScale::Apply(kUsageGuideCloseButtonWidth),
+        ImGui::CalcTextSize(FLocalization::Text(EUiText::Close)).x
+            + style.FramePadding.x * 2.0f);
+    ImGui::SetCursorPosX(std::max(
+        style.WindowPadding.x,
+        ImGui::GetWindowWidth() - style.WindowPadding.x - closeButtonWidth));
+    if (CenteredTextButton(
+            FLocalization::Text(EUiText::Close), ImVec2(closeButtonWidth, 0.0f))
+        || ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+    {
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+    ImGui::PopStyleVar(kUsageGuideStyleVarCount);
+}
+
 void FMainDockSpace::RenderAboutPopup()
 {
     if (bRequestAboutPopup)
@@ -3164,13 +3255,22 @@ void FMainDockSpace::RenderAboutPopup()
         FLocalization::Text(EUiText::AppVersion),
         FAppVersion::String);
 
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const char* latestVersionLabel = FLocalization::Text(EUiText::LatestVersion);
+    const float releasesButtonWidth =
+        ImGui::CalcTextSize(latestVersionLabel).x + style.FramePadding.x * 2.0f;
     const ImVec2 versionTextSize = ImGui::CalcTextSize(versionLabel);
+    const float versionRowHeight = std::max(
+        versionTextSize.y + FUiScale::Apply(kAboutBadgeVerticalPadding) * 2.0f,
+        ImGui::GetFrameHeight());
     const ImVec2 badgeSize(
         versionTextSize.x + FUiScale::Apply(kAboutBadgeHorizontalPadding) * 2.0f,
-        versionTextSize.y + FUiScale::Apply(kAboutBadgeVerticalPadding) * 2.0f);
+        versionRowHeight);
+    // 按两种语言的实际文字宽度将版本号与下载按钮作为一组居中，并保持同高。
+    const float versionRowWidth = badgeSize.x + style.ItemSpacing.x + releasesButtonWidth;
     const ImVec2 badgeCursor = ImGui::GetCursorScreenPos();
     const ImVec2 badgeMin(
-        badgeCursor.x + std::max(0.0f, (contentWidth - badgeSize.x) * 0.5f),
+        badgeCursor.x + std::max(0.0f, (contentWidth - versionRowWidth) * 0.5f),
         badgeCursor.y);
     const ImVec2 badgeMax(
         badgeMin.x + badgeSize.x,
@@ -3180,20 +3280,35 @@ void FMainDockSpace::RenderAboutPopup()
     drawList->AddRectFilled(
         badgeMin,
         badgeMax,
-        kAboutBadgeBackground,
+        ImGui::GetColorU32(ImGuiCol_FrameBg),
         FUiScale::Apply(kAboutBadgeRounding));
     drawList->AddRect(
         badgeMin,
         badgeMax,
-        kAboutBadgeBorder,
+        ImGui::GetColorU32(ImGuiCol_Border),
         FUiScale::Apply(kAboutBadgeRounding));
     drawList->AddText(
         ImVec2(
             badgeMin.x + FUiScale::Apply(kAboutBadgeHorizontalPadding),
-            badgeMin.y + FUiScale::Apply(kAboutBadgeVerticalPadding)),
-        kAboutBadgeText,
+            CalculateGlyphCenteredTextY(versionLabel, badgeMin.y, badgeMax.y)),
+        ImGui::GetColorU32(ImGuiCol_Text),
         versionLabel);
-    ImGui::Dummy(ImVec2(contentWidth, badgeSize.y));
+    ImGui::SetCursorScreenPos(badgeMin);
+    ImGui::Dummy(badgeSize);
+    ImGui::SameLine();
+
+    const bool bOpenReleases = CenteredTextButton(
+        latestVersionLabel, ImVec2(releasesButtonWidth, versionRowHeight));
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("%s", FLocalization::Text(EUiText::ProjectReleasesHelp));
+    }
+    if (bOpenReleases && !FFileDialog::OpenProjectReleases())
+    {
+        FToast::Show(
+            FLocalization::Text(EUiText::ProjectReleasesOpenFailed),
+            kProjectReleasesFailureToastSeconds);
+    }
 
     ImGui::SetCursorPosY(
         ImGui::GetCursorPosY() + FUiScale::Apply(kAboutSectionAdditionalGap));
@@ -3202,7 +3317,6 @@ void FMainDockSpace::RenderAboutPopup()
     ImGui::TextWrapped(
         FLocalization::Text(EUiText::OpenSourceNotice));
 
-    const ImGuiStyle& style = ImGui::GetStyle();
     const float footerY =
         ImGui::GetWindowHeight()
         - style.WindowPadding.y
@@ -3216,16 +3330,6 @@ void FMainDockSpace::RenderAboutPopup()
     ImGui::SetCursorPosY(std::max(
         ImGui::GetCursorPosY(),
         footerY));
-
-    const float licensesButtonWidth = std::max(FUiScale::Apply(kAboutLicensesButtonWidth),
-        ImGui::CalcTextSize(FLocalization::Text(EUiText::ThirdPartyLicenses)).x + style.FramePadding.x * 2.0f);
-    const float footerWidth =
-        licensesButtonWidth
-        + style.ItemSpacing.x
-        + FUiScale::Apply(kAboutConfirmButtonWidth);
-    ImGui::SetCursorPosX(std::max(
-        style.WindowPadding.x,
-        ImGui::GetWindowWidth() - style.WindowPadding.x - footerWidth));
 
     ImGui::PushStyleColor(
         ImGuiCol_Button,
@@ -3243,6 +3347,16 @@ void FMainDockSpace::RenderAboutPopup()
     ImGui::PushStyleVar(
         ImGuiStyleVar_FrameBorderSize,
         FUiScale::Apply(1.0f));
+
+    const float licensesButtonWidth = std::max(FUiScale::Apply(kAboutLicensesButtonWidth),
+        ImGui::CalcTextSize(FLocalization::Text(EUiText::ThirdPartyLicenses)).x + style.FramePadding.x * 2.0f);
+    const float footerWidth =
+        licensesButtonWidth
+        + style.ItemSpacing.x
+        + FUiScale::Apply(kAboutConfirmButtonWidth);
+    ImGui::SetCursorPosX(std::max(
+        style.WindowPadding.x,
+        ImGui::GetWindowWidth() - style.WindowPadding.x - footerWidth));
 
     const bool bOpenLicenses = ImGui::Button(
         FLocalization::Text(EUiText::ThirdPartyLicenses),
@@ -3374,6 +3488,7 @@ void FMainDockSpace::Render()
     // 模态弹窗，不参与 DockSpace 布局
     ExportPanel->Render();
     RenderSettingsPopup();
+    RenderUsageGuidePopup();
     RenderAboutPopup();
 
     // 此时各面板窗口已经存在，可以只切换 Dock 标签而不抢走文件浏览器的键盘焦点。

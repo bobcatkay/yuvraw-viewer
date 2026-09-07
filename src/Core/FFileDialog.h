@@ -4,7 +4,7 @@
 #include <vector>
 
 /**
- * Win32 文件/目录选择对话框
+ * Win32 文件/目录选择对话框与系统 Shell 操作
  *
  * 用系统自带的 IFileOpenDialog（COM），不引入第三方库。
  * ImGui 没有原生文件对话框，而自绘一个既难看又缺少"最近位置/快捷方式/网络路径"等系统能力。
@@ -38,4 +38,7 @@ namespace FFileDialog
      * @return 路径不存在或 Shell 调用失败时返回 false
      */
     bool RevealInExplorer(const std::string& Path);
+
+    /** 用默认浏览器打开项目 Releases 页面；Shell 调用失败时返回 false。 */
+    bool OpenProjectReleases();
 }

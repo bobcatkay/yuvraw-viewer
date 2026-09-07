@@ -32,6 +32,13 @@
 也不必递增 `kDockSpaceId`。参考 `FExportPanel` —— `OpenPopup` 与 `BeginPopupModal`
 必须在同一个 ID 栈里，所以外部只置位 `bRequestOpen`，真正打开留到 `Render()` 里做。
 
+帮助菜单的“使用说明”由 `FMainDockSpace::RenderUsageGuidePopup()` 显示，正文按中英文资源分节滚动，
+底部关闭按钮固定，支持标题栏关闭与 Esc；内容只保留快捷键及不明显的操作方法，不放 YUV/RAW 参数、
+常规菜单介绍、格式限制或排查说明。文档中的弹窗介绍与实际内容保持一致。
+“关于”中的“最新版本”按钮放在版本号右侧，两者同高并作为一组居中；版本号使用主题的输入控件背景、
+边框与文字色。按钮通过 `FFileDialog::OpenProjectReleases()` 将固定项目 Releases 地址交给默认浏览器，
+Shell 调用失败时记录日志并显示本地化提示。
+
 面板 Begin 返回 false 时应配对 End 并跳过内容计算；属性面板仍须在原 ID 栈内维护格式预设模态弹窗。文件浏览器刷新后用已排序的原生路径二分查找选中项，每个选中路径只转换一次，保留多选导出顺序；枚举失败时清空不完整列表。
 
 ## 主题调色板

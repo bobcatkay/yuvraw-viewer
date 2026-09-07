@@ -19,7 +19,7 @@ src/
     FCommandLine           命令行解析
     FHdrDisplay            显示器 HDR 能力探测（DXGI + Win32 显示配置，与渲染 API 无关）
     FHdrPresenter          **HDR 呈现层**：fp16 FBO + WGL_NV_DX_interop2 + D3D11 交换链
-    FFileDialog            Win32 IFileOpenDialog 封装（文件/目录）+ 在资源管理器中定位文件
+    FFileDialog            Win32 IFileOpenDialog 封装（文件/目录）+ 在资源管理器中定位文件 + 用默认浏览器打开项目 Releases
     FAsyncJob              单个后台任务 + 忙碌状态（工作线程跑，主线程 Poll 收尾）
     FAsyncImageLoader      有界代际邮箱 + 后台解码 + 隐藏共享 Context 纹理上传 + fence/主线程回退
     FUserSettings          跨会话偏好（%APPDATA%\YUVRaw\settings.ini），界面语言 + 主窗口边界 + 精简主题调色板 + 上次浏览目录 + 最近打开 15 条 + 自定义图像格式预设 + 图片配置缓存容量 + 直方图显示方式 + 对比模式 + 单图对比提示次数

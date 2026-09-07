@@ -3,6 +3,7 @@
 #include "Util.h"
 
 #include <windows.h>
+#include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
 #include <wrl/client.h>
@@ -13,6 +14,9 @@ using Microsoft::WRL::ComPtr;
 
 namespace
 {
+    constexpr const wchar_t* kProjectReleasesUrl =
+        L"https://github.com/bobcatkay/yuvraw-viewer/releases";
+
     /**
      * 作用域内的 COM 初始化。
      * GLFW 已经初始化过 COM，所以这里通常拿到 S_FALSE 或 RPC_E_CHANGED_MODE，都不算失败。
@@ -127,6 +131,30 @@ namespace
 
 namespace FFileDialog
 {
+    bool OpenProjectReleases()
+    {
+        FScopedCoInitialize comInit;
+        LOGI("ProjectReleases", "Opening project releases in the default browser");
+
+        // 直接将固定 HTTPS 地址交给 Shell，使用默认浏览器；失败由应用提示，避免额外系统弹窗。
+        SHELLEXECUTEINFOW executeInfo{};
+        executeInfo.cbSize = sizeof(executeInfo);
+        executeInfo.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+        executeInfo.lpVerb = L"open";
+        executeInfo.lpFile = kProjectReleasesUrl;
+        executeInfo.nShow = SW_SHOWNORMAL;
+
+        if (!ShellExecuteExW(&executeInfo))
+        {
+            const DWORD error = GetLastError();
+            LOGE("ProjectReleases", "ShellExecuteExW failed: %lu", error);
+            return false;
+        }
+
+        LOGI("ProjectReleases", "Project releases browser request accepted");
+        return true;
+    }
+
     bool OpenFile(const std::string& Title, const std::vector<std::string>& Extensions, std::string& OutPath)
     {
         FScopedCoInitialize comInit;

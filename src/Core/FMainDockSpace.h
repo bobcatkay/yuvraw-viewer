@@ -291,6 +291,9 @@ private:
      */
     void RenderAboutPopup();
 
+    /** 渲染可滚动的使用说明弹窗，内容随界面语言切换。 */
+    void RenderUsageGuidePopup();
+
     /**
      * 渲染设置模态弹窗（主题色、图片配置缓存容量与数据清理）。
      */
@@ -373,6 +376,7 @@ private:
     bool bIsInitialized;
     bool bWantsToClose;
     bool bRequestAboutPopup;
+    bool bRequestUsageGuidePopup;
     bool bRequestSettingsPopup;
     /// 清除缓存后若用户未再切图，退出时不要把当前两张图立即塞回刚清空的缓存。
     bool bSkipActiveImageConfigOnShutdown;

@@ -50,6 +50,9 @@ public:
      */
     void SetOnSettings(MenuCallback Callback);
 
+    /** 设置使用说明弹窗回调。 */
+    void SetOnUsageGuide(MenuCallback Callback);
+
     /**
      * 设置关于对话框显示回调
      */
@@ -72,6 +75,7 @@ private:
     MenuCallback OnExport;
     MenuCallback OnExit;
     MenuCallback OnSettings;
+    MenuCallback OnUsageGuide;
     MenuCallback OnAbout;
     MenuCallback FileMenuExtras;
 
