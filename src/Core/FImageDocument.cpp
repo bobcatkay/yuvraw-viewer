@@ -1,11 +1,15 @@
 #include "FImageDocument.h"
 
 #include "FAsyncImageLoader.h"
+#include "FLocalization.h"
 #include "Image/FImageFormatDesc.h"
 #include "Image/FImageLoader.h"
+#include "gl/FTexture.h"
+#include "FUserSettings.h"
 #include "Util.h"
 
 #include <filesystem>
+#include <exception>
 
 namespace
 {
@@ -129,7 +133,7 @@ bool FImageDocument::CommitLoadResult(FImageLoadResult&& Result)
     {
         if (LastError.empty())
         {
-            LastError = u8"GPU 纹理创建失败";
+            LastError = FLocalization::Text(EUiText::TextureCreationFailed);
         }
 
         LOGE("CommitLoadResult", "Failed to prepare image (%s)", LastError.c_str());
@@ -163,9 +167,9 @@ void FImageDocument::SetImageData(std::unique_ptr<FImageData> InImageData, const
 
     ImageData = std::move(InImageData);
 
-    if (!UpdateTexture())
+    if (!UpdateTexture() && LastError.empty())
     {
-        LastError = u8"GPU 纹理创建失败";
+        LastError = FLocalization::Text(EUiText::TextureCreationFailed);
     }
 
     if (OnChanged)
@@ -278,8 +282,10 @@ bool FImageDocument::UpdateTexture()
 
     TextureData = std::make_unique<FTextureData>();
 
-    if (!TextureData->CreateFromImageData(ImageData.get()))
+    FTextureCreateError textureError;
+    if (!TextureData->CreateFromImageData(ImageData.get(), &textureError, FUserSettings::GetTextureLoadOptions()))
     {
+        LastError = textureError.GetText();
         LOGE("UpdateTexture", "Failed to create texture, Format: %d, %dx%d",
              static_cast<int>(ImageData->GetFormat()), ImageData->GetWidth(), ImageData->GetHeight());
 

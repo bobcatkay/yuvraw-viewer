@@ -386,6 +386,7 @@ private:
     bool bSkipActiveImageConfigOnShutdown;
 
     int32_t SettingsCacheCapacityDraft;
+    FTextureLoadOptions SettingsTextureLoadOptionsDraft;
     FLocalization::ELanguage SettingsLanguageDraft = FLocalization::kDefaultLanguage;
     FUserSettings::FThemePalette SettingsThemePaletteDraft;
     FUserSettings::EThemeColorRole SettingsThemeSelectedRole;

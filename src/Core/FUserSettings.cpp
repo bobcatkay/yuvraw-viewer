@@ -25,6 +25,8 @@ namespace
 {
     constexpr const char* kLastDirectoryKey = "LastDirectory";
     constexpr const char* kLanguageKey = "Language";
+    constexpr const char* kSparseTexturesEnabledKey = "SparseTexturesEnabled";
+    constexpr const char* kSparseTextureDimensionThresholdKey = "SparseTextureDimensionThreshold";
     constexpr const char* kLanguageLogTag = "Language";
     constexpr const char* kRecentFileKey = "RecentFile";
     constexpr const char* kImageFormatPresetKey = "ImageFormatPreset";
@@ -239,6 +241,7 @@ namespace
 
     struct FSettingsStore
     {
+        FTextureLoadOptions TextureLoadOptions;
         FLocalization::ELanguage Language = FLocalization::kDefaultLanguage;
         std::string LastDirectory;
         std::vector<std::string> RecentFiles;
@@ -936,6 +939,19 @@ namespace
                     store.ImageFormatPresets.push_back(std::move(preset));
                 }
             }
+            else if (key == kSparseTexturesEnabledKey)
+            {
+                TryParseBoolean(value, store.TextureLoadOptions.bEnableSparseTextures);
+            }
+            else if (key == kSparseTextureDimensionThresholdKey)
+            {
+                int32_t threshold = 0;
+                if (TryParseInt32(value, threshold) && threshold > 0)
+                {
+                    store.TextureLoadOptions.SparseDimensionThreshold = threshold;
+                    store.TextureLoadOptions.Normalize();
+                }
+            }
             else if (key == kImageConfigCacheCapacityKey)
             {
                 size_t capacity = 0;
@@ -1075,6 +1091,8 @@ namespace
 
         file << kLastDirectoryKey << "=" << Store().LastDirectory << "\n";
         file << kLanguageKey << "=" << FLocalization::LanguageCode(Store().Language) << "\n";
+        file << kSparseTexturesEnabledKey << "=" << (Store().TextureLoadOptions.bEnableSparseTextures ? 1 : 0) << "\n";
+        file << kSparseTextureDimensionThresholdKey << "=" << Store().TextureLoadOptions.SparseDimensionThreshold << "\n";
         file << kImageConfigCacheCapacityKey << "="
              << Store().ImageConfigCacheCapacity << "\n";
         for (const FThemeColorSetting& setting : kThemeColorSettings)
@@ -1164,6 +1182,31 @@ namespace
 
 namespace FUserSettings
 {
+    FTextureLoadOptions GetTextureLoadOptions()
+    {
+        EnsureLoaded();
+        return Store().TextureLoadOptions;
+    }
+
+    bool SetTextureLoadOptions(FTextureLoadOptions Options)
+    {
+        EnsureLoaded();
+        Options.Normalize();
+        const auto previous = Store().TextureLoadOptions;
+        if (previous.bEnableSparseTextures == Options.bEnableSparseTextures &&
+            previous.SparseDimensionThreshold == Options.SparseDimensionThreshold) return true;
+        Store().TextureLoadOptions = Options;
+        if (!Save())
+        {
+            Store().TextureLoadOptions = previous;
+            FLogger::Write("ERROR", "FUserSettings.cpp", "TextureLoad", "Could not persist texture policy; previous settings retained");
+            return false;
+        }
+        FLogger::Write("INFO", "FUserSettings.cpp", "TextureLoad", "Policy saved: sparseEnabled=%d threshold=%d px",
+            Options.bEnableSparseTextures, Options.SparseDimensionThreshold);
+        return true;
+    }
+
     FLocalization::ELanguage GetLanguage()
     {
         EnsureLoaded();

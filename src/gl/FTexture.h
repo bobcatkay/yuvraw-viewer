@@ -2,6 +2,29 @@
 
 #include <glad/glad.h>
 #include <cstdint>
+#include <string>
+
+enum class ETextureCreateError
+{
+    None,
+    InvalidDimensions,
+    DimensionLimit,
+    LimitUnavailable,
+    OutOfMemory,
+    OpenGlFailure,
+};
+
+/** 按次返回创建失败原因，尺寸超限与实际分配失败不能混为一谈。 */
+struct FTextureCreateError
+{
+    ETextureCreateError Type = ETextureCreateError::None;
+    int32_t Width = 0;
+    int32_t Height = 0;
+    int32_t MaximumDimension = 0;
+    GLenum OpenGlError = GL_NO_ERROR;
+
+    std::string GetText() const;
+};
 
 /**
  * OpenGL纹理封装类
@@ -13,6 +36,12 @@ public:
     FTexture();
     ~FTexture();
 
+    /** 在当前 GL Context 上查询单纹理边长上限；边长等于上限时允许创建。 */
+    static bool ValidateDimensions(
+        int32_t Width,
+        int32_t Height,
+        FTextureCreateError* OutError = nullptr);
+
     /**
      * 创建纹理
      * @param Width 宽度（有效像素数）
@@ -23,6 +52,7 @@ public:
      * @param Type 数据类型
      * @param RowLength 源数据每行的像素数（含行尾 padding）。0 表示与 Width 相同（紧凑排列）。
      *                  用于跳过 stride padding，交由 GL 的 GL_UNPACK_ROW_LENGTH 处理。
+     * @param OutError 可选失败详情，成功时清为 None。
      * @return 是否创建成功
      */
     bool Create(
@@ -32,7 +62,8 @@ public:
         GLint InternalFormat = GL_RGBA,
         GLint Format = GL_RGBA,
         GLenum Type = GL_UNSIGNED_BYTE,
-        int32_t RowLength = 0
+        int32_t RowLength = 0,
+        FTextureCreateError* OutError = nullptr
     );
 
     /**

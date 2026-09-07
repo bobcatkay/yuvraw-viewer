@@ -220,6 +220,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\Copy
     <ClCompile Include="src\UI\FUiIcons.cpp" />
     <ClCompile Include="src\UI\FUiTheme.cpp" />
     <ClCompile Include="src\GL\FTexture.cpp" />
+    <ClCompile Include="src\GL\FSparseTexture.cpp" />
     <ClCompile Include="src\GL\FShader.cpp" />
     <ClCompile Include="src\GL\FShaderManager.cpp" />
     <ClCompile Include="src\GL\FTextureData.cpp" />
@@ -277,10 +278,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\Copy
     <ClInclude Include="src\UI\FUiLayout.h" />
     <ClInclude Include="src\UI\FUiTheme.h" />
     <ClInclude Include="src\GL\FTexture.h" />
+    <ClInclude Include="src\GL\FSparseTexture.h" />
     <ClInclude Include="src\GL\FShader.h" />
     <ClInclude Include="src\GL\FShaderManager.h" />
     <ClInclude Include="src\GL\FShaders.h" />
     <ClInclude Include="src\GL\FTextureData.h" />
+    <ClInclude Include="src\GL\FTextureLoadOptions.h" />
     <ClInclude Include="src\Util.h" />
     <ClInclude Include="src\Core\FUiResources.h" />
   </ItemGroup>

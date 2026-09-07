@@ -657,7 +657,8 @@ namespace
         ImDrawList* DrawList,
         const ImVec2& Pos,
         float Size,
-        ERotationDirection Direction)
+        ERotationDirection Direction,
+        ImU32 Color = kGlyphColor)
     {
         const float thickness =
             GetNormalizedStrokeWidth(Size, kRotationStrokeRatio);
@@ -696,11 +697,11 @@ namespace
         const ImVec2 arcStart = DrawList->_Path.front();
         const ImVec2 arcEnd = DrawList->_Path.back();
         DrawList->PathStroke(
-            kGlyphColor,
+            Color,
             ImDrawFlags_None,
             thickness);
-        DrawList->AddCircleFilled(arcStart, capRadius, kGlyphColor);
-        DrawList->AddCircleFilled(arcEnd, capRadius, kGlyphColor);
+        DrawList->AddCircleFilled(arcStart, capRadius, Color);
+        DrawList->AddCircleFilled(arcEnd, capRadius, Color);
 
         const FNormalizedPoint arrowPointsNormalized[] = {
             {
@@ -732,7 +733,7 @@ namespace
             arrowPoints,
             IM_ARRAYSIZE(arrowPoints),
             false,
-            kGlyphColor,
+            Color,
             thickness);
     }
 
@@ -1029,6 +1030,24 @@ void FUiIcons::DrawViewerGlyph(ImDrawList* DrawList, EViewerGlyph Glyph, const I
         break;
     }
     }
+}
+
+bool FUiIcons::ResetButton(const char* Id, const char* Tooltip, float Size)
+{
+    const float buttonSize = Size > 0.0f ? Size : ImGui::GetFrameHeight();
+    const ImVec2 buttonPos = ImGui::GetCursorScreenPos();
+    const bool bClicked = ImGui::Button(Id, ImVec2(buttonSize, buttonSize));
+    const float iconSize = buttonSize * kViewerButtonIconRatio;
+    const float inset = (buttonSize - iconSize) * 0.5f;
+    // 复用旋转图标几何；设置控件跟随文字色和禁用透明度，避免主题预览时失去对比。
+    DrawRotationGlyph(ImGui::GetWindowDrawList(),
+        ImVec2(buttonPos.x + inset, buttonPos.y + inset), iconSize,
+        ERotationDirection::CounterClockwise, ImGui::GetColorU32(ImGuiCol_Text));
+    if (Tooltip && *Tooltip && ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("%s", Tooltip);
+    }
+    return bClicked;
 }
 
 bool FUiIcons::ViewerButton(

@@ -83,6 +83,7 @@ $sources = @(
     (Join-Path $srcDir "Image\FImageFormatDesc.cpp")
     (Join-Path $srcDir "Image\FImageSampler.cpp")
     (Join-Path $srcDir "gl\FTexture.cpp")
+    (Join-Path $srcDir "gl\FSparseTexture.cpp")
     (Join-Path $srcDir "gl\FTextureData.cpp")
     (Join-Path $srcDir "gl\FShader.cpp")
     (Join-Path $srcDir "gl\FShaderManager.cpp")

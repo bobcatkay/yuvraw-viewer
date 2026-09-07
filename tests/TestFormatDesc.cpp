@@ -652,7 +652,8 @@ int main()
     std::printf("\n=== 尺寸与内存安全边界 ===\n");
     {
         constexpr int32_t kBoundaryWidth = 16384;
-        constexpr int32_t kBoundaryHeight = 8192;
+        constexpr int32_t kBoundaryHeight = static_cast<int32_t>(
+            FImageLimits::kMaximumPixelCount / static_cast<size_t>(kBoundaryWidth));
         constexpr int32_t kAboveBoundaryHeight = kBoundaryHeight + 1;
         constexpr int32_t kSmallWidth = 4;
         constexpr int32_t kSmallHeight = 2;

@@ -11,6 +11,8 @@
 #include "Image/FRawImageLoader.h"
 #include "gl/FShader.h"
 #include "gl/FShaderManager.h"
+#include "gl/FShaders.h"
+#include "gl/FSparseTexture.h"
 #include "gl/FTexture.h"
 #include "gl/FTextureData.h"
 
@@ -26,9 +28,11 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace
@@ -57,6 +61,24 @@ namespace
     constexpr GLuint64 kSharedFenceTimeoutNanoseconds = 1000000000ULL;
     constexpr int32_t kGlContextMajorVersion = 3;
     constexpr int32_t kGlContextMinorVersion = 3;
+    constexpr int32_t kSparseTestWidth = 2049;
+    constexpr int32_t kSparseTestHeight = 1025;
+    constexpr size_t kSparseTestUploadBytes = 4u << 20;
+    constexpr uint8_t kSparseTestPadding = 0xA5;
+    constexpr int32_t kSparseTestColorSpan = 128;
+    constexpr uint8_t kSparseTestBaseColor[] = {17, 37, 83};
+    constexpr int32_t kSparseTestUnpackAlignment = 8;
+    constexpr int32_t kDefaultUnpackAlignment = 4;
+    constexpr int32_t kSparsePreviewTestSide = 4097;
+    constexpr uint8_t kSparsePreviewTestValue = 125;
+    constexpr int32_t kSparsePreviewMaximumDraws = 32;
+    constexpr int32_t kTilePatternRowMultiplier = 17;
+    constexpr int32_t kTilePatternChannelMultiplier = 31;
+    constexpr int32_t kTilePatternBase = 32;
+    constexpr int32_t kTilePatternSpan = 192;
+    constexpr int32_t kByteMaximum = 255;
+    constexpr size_t kMatrixYScaleIndex = 5;
+    constexpr size_t kMatrixYTranslationIndex = 13;
 
     // --- 色彩管线用例（uPipelineEnabled = 1 的那些分支）---
 
@@ -2629,6 +2651,341 @@ namespace
         return true;
     }
 
+    bool ValidateSparseTextureResidency(const FFullscreenQuad& Quad, const FOffscreenTarget& Target)
+    {
+        if (!FSparseTexture::IsSupported())
+        {
+            std::printf("Sparse residency: SKIP (GL_ARB_sparse_texture unavailable)\n");
+            return true;
+        }
+        // 非页对齐的 RGB 边界和非整纹素 stride，覆盖 RGBA 存储替代、页内重排及边缘钳制。
+        constexpr int32_t stride = kSparseTestWidth * kRgbChannelCount + kSingleBytePadding;
+        std::vector<uint8_t> pixels(static_cast<size_t>(stride) * kSparseTestHeight, kSparseTestPadding);
+        for (int32_t y = 0; y < kSparseTestHeight; ++y)
+        {
+            for (int32_t x = 0; x < kSparseTestWidth; ++x)
+            {
+                uint8_t* pixel = pixels.data() + static_cast<size_t>(y) * stride + x * kRgbChannelCount;
+                pixel[0] = static_cast<uint8_t>(kSparseTestBaseColor[0] + kSparseTestColorSpan * x / kSparseTestWidth);
+                pixel[1] = static_cast<uint8_t>(kSparseTestBaseColor[1] + kSparseTestColorSpan * y / kSparseTestHeight);
+                pixel[2] = static_cast<uint8_t>(kSparseTestBaseColor[2] + kSparseTestColorSpan * (x + y) /
+                    (kSparseTestWidth + kSparseTestHeight));
+            }
+        }
+        FSparseTexture texture;
+        FShader shader;
+        const char* vertex = R"(
+            #version 330 core
+            layout (location = 0) in vec2 aPos;
+            uniform vec2 uProbe;
+            out vec2 TexCoord;
+            void main() { gl_Position = vec4(aPos, 0.0, 1.0); TexCoord = uProbe; }
+        )";
+        if (!texture.Create(kSparseTestWidth, kSparseTestHeight, GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE, kRgbChannelCount) ||
+            !shader.CreateFromSource(vertex, FShaders::GetFragmentShaderForFormat(EImageFormat::RGB8)))
+        {
+            std::printf("Sparse residency: **FAIL** storage/shader creation\n");
+            return false;
+        }
+        bool passed = texture.GetResidentBytes() == 0;
+        FTextureCreateError error;
+        size_t budget = 0;
+        const FTextureViewRegion regions[] = { {0, 0, 0.5f, 0.5f}, {0.5f, 0.5f, 1, 1} };
+        passed = !texture.Update(regions[0], pixels.data(), stride, budget, error) &&
+            error.Type == ETextureCreateError::None && texture.GetResidentBytes() == 0 && passed;
+
+        // 渲染时上传不能继承外部 PBO/skip 状态，返回后也不能污染调用方的 unpack 状态。
+        GLuint unpackBuffer = 0;
+        glGenBuffers(1, &unpackBuffer);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, unpackBuffer);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, kSparseTestUnpackAlignment);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, kSparseTestWidth);
+        glPixelStorei(GL_UNPACK_SKIP_PIXELS, 1);
+        glPixelStorei(GL_UNPACK_SKIP_ROWS, 2);
+        glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_TRUE);
+        budget = kSparseTestUploadBytes;
+        texture.Update(regions[0], pixels.data(), stride, budget, error);
+        const std::pair<GLenum, GLint> unpackState[] = {
+            {GL_PIXEL_UNPACK_BUFFER_BINDING, static_cast<GLint>(unpackBuffer)},
+            {GL_UNPACK_ALIGNMENT, kSparseTestUnpackAlignment}, {GL_UNPACK_ROW_LENGTH, kSparseTestWidth},
+            {GL_UNPACK_SKIP_PIXELS, 1}, {GL_UNPACK_SKIP_ROWS, 2}, {GL_UNPACK_SWAP_BYTES, GL_TRUE}
+        };
+        for (const auto& state : unpackState)
+        {
+            GLint value = 0;
+            glGetIntegerv(state.first, &value);
+            passed = value == state.second && passed;
+        }
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        glDeleteBuffers(1, &unpackBuffer);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, kDefaultUnpackAlignment);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+        glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+        glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_FALSE);
+        passed = error.Type == ETextureCreateError::None && passed;
+
+        for (const FTextureViewRegion& region : regions)
+        {
+            const size_t needed = texture.EstimateResidentBytes(region);
+            passed = needed > 0 && texture.Trim(region, error) && passed;
+            bool ready = false;
+            const size_t maximumPasses = needed / kSparseTestUploadBytes + 2;
+            for (size_t pass = 0; pass < maximumPasses && !ready; ++pass)
+            {
+                const size_t before = texture.GetResidentBytes();
+                budget = kSparseTestUploadBytes;
+                ready = texture.Update(region, pixels.data(), stride, budget, error);
+                passed = error.Type == ETextureCreateError::None && budget <= kSparseTestUploadBytes &&
+                    texture.GetResidentBytes() - before <= kSparseTestUploadBytes &&
+                    texture.GetResidentBytes() <= needed && passed;
+                if (error.Type != ETextureCreateError::None) break;
+            }
+            if (!ready) { passed = false; break; }
+            budget = 0;
+            passed = texture.GetResidentBytes() == needed &&
+                texture.Update(region, pixels.data(), stride, budget, error) && passed;
+
+            // 只采样已驻留区域；生产片段着色器必须将 UV=0/1 钳到真实边缘的 texel center。
+            const bool firstRegion = region.MinU == 0;
+            const int32_t sampleX = firstRegion ? 0 : kSparseTestWidth - 1;
+            const int32_t sampleY = firstRegion ? 0 : kSparseTestHeight - 1;
+            const uint8_t* expected = pixels.data() + static_cast<size_t>(sampleY) * stride + sampleX * kRgbChannelCount;
+            Target.Bind();
+            glDisable(GL_BLEND);
+            glDisable(GL_SCISSOR_TEST);
+            glDisable(GL_DITHER);
+            glDisable(GL_FRAMEBUFFER_SRGB);
+            shader.Use();
+            shader.SetInt("uTexture", 0);
+            shader.SetVec2("uTextureScale0", texture.GetScaleX(), texture.GetScaleY());
+            shader.SetVec2("uProbe", firstRegion ? 0.0f : 1.0f, firstRegion ? 0.0f : 1.0f);
+            texture.Bind(0, false);
+            Quad.Draw();
+            const std::vector<uint8_t> rendered = Target.ReadPixels();
+            for (size_t i = 0; i < rendered.size(); i += kRgbaChannelCount)
+                for (int32_t channel = 0; channel < kRgbChannelCount; ++channel)
+                    passed = std::abs(static_cast<int32_t>(rendered[i + channel]) - expected[channel]) <= kRenderTolerance && passed;
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+        passed = texture.Evict(error) && texture.GetResidentBytes() == 0 && glGetError() == GL_NO_ERROR && passed;
+        budget = 0;
+        passed = !texture.Update(regions[0], pixels.data(), stride, budget, error) &&
+            error.Type == ETextureCreateError::None && passed;
+        std::printf("Sparse residency/stride/edge sampling: %s\n", passed ? "OK" : "**FAIL**");
+        return passed;
+    }
+
+    bool ValidateSparsePreview(const FFullscreenQuad& Quad, const FOffscreenTarget& Target)
+    {
+        if (!FSparseTexture::IsSupported()) return true;
+        FImageData image;
+        image.SetFormat(EImageFormat::RGBA8);
+        image.SetSize(kSparsePreviewTestSide, kSparsePreviewTestSide);
+        image.AllocatePixelData(static_cast<size_t>(kSparsePreviewTestSide) * kSparsePreviewTestSide * kRgbaChannelCount);
+        std::fill_n(image.GetPixelData(), image.GetPixelDataSize(), kSparsePreviewTestValue);
+        FTextureData textures;
+        bool passed = !textures.PrepareSparsePreview(&image, []() { return false; });
+        FTextureLoadOptions options;
+        options.SparseDimensionThreshold = FTextureLoadOptions::kMinimumSparseDimensionThreshold;
+        if (!textures.PrepareSparsePreview(&image) || !textures.CreateFromImageData(&image, nullptr, options) || !textures.HasSparseTextures())
+        {
+            std::printf("Sparse preview: **FAIL** preparation/creation\n");
+            return false;
+        }
+        passed = !textures.IsShowingSparseDetail() && textures.GetTexture(0)->GetWidth() < image.GetWidth() &&
+            !textures.UpdateFromImageData(&image) && passed;
+        FShader shader;
+        if (!shader.CreateFromSource(FShaders::GetVertexShader(), FShaders::GetFragmentShaderForFormat(image.GetFormat())))
+            return false;
+        const auto render = [&]() {
+            Target.Bind();
+            glDisable(GL_BLEND);
+            glDisable(GL_SCISSOR_TEST);
+            shader.Use();
+            shader.SetMat4("uProjection", kIdentityMatrix4);
+            shader.SetMat4("uTransform", kIdentityMatrix4);
+            shader.SetInt("uTexture", 0);
+            float x = 1, y = 1;
+            textures.GetTextureCoordinateScale(0, x, y);
+            shader.SetVec2("uTextureScale0", x, y);
+            textures.BindTextures();
+            Quad.Draw();
+            textures.FinishDraw();
+            const std::vector<uint8_t> rendered = Target.ReadPixels();
+            for (size_t i = 0; i < rendered.size(); i += kRgbaChannelCount)
+                for (int32_t channel = 0; channel < kRgbChannelCount; ++channel)
+                    passed = rendered[i + channel] == kSparsePreviewTestValue && passed;
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        };
+        render(); // 第一帧仅使用完整预览，尚未提交任何原图页面。
+        for (int32_t draw = 0; draw < kSparsePreviewMaximumDraws && !textures.IsShowingSparseDetail(); ++draw)
+        {
+            textures.PrepareForDraw(&image, {});
+            render();
+            if (textures.HasSparseFailure()) break;
+        }
+        passed = textures.IsShowingSparseDetail() && !textures.HasSparseFailure() &&
+            glGetError() == GL_NO_ERROR && passed;
+        textures.PrepareForDraw(&image, {0, 0, 0, 0});
+        passed = !textures.IsShowingSparseDetail() && passed;
+        render(); // 全部回收后预览仍有效。
+        std::printf("Sparse preview/cancellation/detail handoff: %s\n", passed ? "OK" : "**FAIL**");
+        return passed;
+    }
+
+    bool ValidateTiledFallback(const FFullscreenQuad& Quad, const FOffscreenTarget& Target)
+    {
+        GLint maximumDimension = 0;
+        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maximumDimension);
+        if (maximumDimension >= FImageLimits::kMaximumDimension - 1)
+        {
+            std::printf("Tiled fallback: SKIP (GPU limit covers the entire supported image range)\n");
+            return true;
+        }
+        // A thin image crosses the real GPU limit without allocating a huge CPU fixture.
+        const EImageFormat formats[] = { EImageFormat::RGBA8, EImageFormat::RGB16, EImageFormat::NV12,
+            EImageFormat::YV12, EImageFormat::P010, EImageFormat::YUY2, EImageFormat::Bayer8, EImageFormat::RGB10A2 };
+        bool passed = true;
+        for (const auto format : formats)
+        {
+            const auto& desc = FImageFormatDesc::Get(format);
+            // Chroma planes use normalized whole-image coordinates; keep 4:2:0 geometry even
+            // for CPU nearest-neighbor comparison, while other formats exercise an odd tail.
+            const int32_t height = desc.PlaneCount > 1 && desc.Planes[1].HeightShift > 0
+                ? (maximumDimension / 2 + 1) * 2 : maximumDimension + 1;
+            FImageData image;
+            image.SetFormat(format);
+            image.SetSize(kTestWidth, height);
+            // RGB16 exercises row padding which GL_UNPACK_ROW_LENGTH cannot represent.
+            if (format == EImageFormat::RGB16) image.SetStride(image.GetStride() + kTwoBytePadding);
+            image.AllocatePixelData(FImageFormatDesc::CalculateFrameSize(format, kTestWidth, height, image.GetStride()));
+            for (int32_t plane = 0; plane < desc.PlaneCount; ++plane)
+            {
+                const int32_t stride = FImageFormatDesc::GetPlaneStrideBytes(desc, plane, image.GetStride());
+                const int32_t rows = FImageFormatDesc::GetPlaneHeight(desc, plane, height);
+                const size_t offset = FImageFormatDesc::GetPlaneOffsetBytes(desc, plane, height, image.GetStride());
+                for (int32_t y = 0; y < rows; ++y)
+                    for (int32_t b = 0; b < stride; ++b)
+                        image.GetPixelData()[offset + static_cast<size_t>(y) * stride + b] = static_cast<uint8_t>(
+                            kTilePatternBase + (y * kTilePatternRowMultiplier + b * kTilePatternChannelMultiplier) % kTilePatternSpan);
+            }
+            FTextureData textures;
+            FTextureLoadOptions options;
+            options.bEnableSparseTextures = false;
+            FTextureCreateError error;
+            if (!textures.CreateFromImageData(&image, &error, options) || !textures.HasTiledTextures() || textures.HasSparseTextures())
+            {
+                std::printf("Tiled fallback %s: **FAIL** %s\n", desc.Name, error.GetText().c_str());
+                passed = false;
+                continue;
+            }
+            FShader shader;
+            if (!shader.CreateFromSource(FShaders::GetVertexShader(), FShaders::GetFragmentShaderForFormat(format))) return false;
+            FDisplaySettings display;
+            display.ColorRange = EColorRange::Full;
+            const auto context = FImageSampler::MakeContext(image, display, EBayerPattern::RGGB);
+            textures.SetMagFilterNearest(true);
+            // Inspect both sides of every tile boundary and the last image row.
+            for (uint32_t boundaryIndex = 1; boundaryIndex <= textures.GetDrawCount(); ++boundaryIndex)
+            {
+                FTextureViewRegion boundary;
+                int32_t boundaryY = height;
+                if (boundaryIndex < textures.GetDrawCount())
+                {
+                    textures.PrepareForDraw(&image, {});
+                    textures.GetDrawRegion(boundaryIndex, boundary);
+                    boundaryY = static_cast<int32_t>(std::lround(boundary.MinV * height));
+                }
+                const int32_t top = std::clamp(boundaryY - kTestHeight / 2, 0, height - kTestHeight);
+                const FTextureViewRegion visible{ 0, static_cast<float>(top) / height, 1,
+                    static_cast<float>(top + kTestHeight) / height };
+                textures.PrepareForDraw(&image, visible);
+                Target.Bind();
+                glDisable(GL_BLEND);
+                glDisable(GL_SCISSOR_TEST);
+                glDisable(GL_DITHER);
+                glDisable(GL_FRAMEBUFFER_SRGB);
+                glClearColor(0, 0, 0, 1);
+                glClear(GL_COLOR_BUFFER_BIT);
+                ConfigureShader(shader, image, textures, display, EChannelView::Color, FColorTransform::BuildPipeline(display));
+                float transform[sizeof(kIdentityMatrix4) / sizeof(float)];
+                std::copy(std::begin(kIdentityMatrix4), std::end(kIdentityMatrix4), transform);
+                transform[kMatrixYScaleIndex] = static_cast<float>(height) / kTestHeight;
+                transform[kMatrixYTranslationIndex] = static_cast<float>(height - 2 * top) / kTestHeight - 1.0f;
+                shader.SetMat4("uTransform", transform);
+                for (uint32_t tile = 0; tile < textures.GetDrawCount(); ++tile)
+                {
+                    FTextureViewRegion region;
+                    if (!textures.GetDrawRegion(tile, region)) continue;
+                    textures.BindTextures(0, tile);
+                    shader.SetVec4("uDrawRegion", region.MinU, region.MinV, region.MaxU, region.MaxV);
+                    const char* scaleUniforms[] = { "uTextureScale0", "uTextureScale1", "uTextureScale2" };
+                    const char* offsetUniforms[] = { "uTextureOffset0", "uTextureOffset1", "uTextureOffset2" };
+                    for (uint32_t semantic = 0; semantic < textures.GetTextureCount(); ++semantic)
+                    {
+                        const uint32_t plane = desc.PlaneCount >= 3 && desc.bSwapChroma && semantic > 0 ? 3 - semantic : semantic;
+                        float x = 0, y = 0;
+                        textures.GetTextureCoordinateScale(plane, x, y, tile);
+                        shader.SetVec2(scaleUniforms[semantic], x, y);
+                        textures.GetTextureCoordinateOffset(plane, x, y, tile);
+                        shader.SetVec2(offsetUniforms[semantic], x, y);
+                    }
+                    float x = 0, y = 0;
+                    textures.GetTextureTexelOrigin(0, x, y, tile);
+                    shader.SetVec2("uTextureOrigin0", x, y);
+                    Quad.Draw();
+                }
+                const auto gpu = Target.ReadPixels();
+                std::vector<uint8_t> cpu;
+                for (int32_t y = top; y < top + kTestHeight; ++y)
+                {
+                    for (int32_t x = 0; x < kTestWidth; ++x)
+                    {
+                        FPixelSample sample;
+                        if (!FImageSampler::SamplePixel(image, x, y, context, sample)) return false;
+                        for (int32_t c = 0; c < kRgbChannelCount; ++c)
+                            cpu.push_back(static_cast<uint8_t>(std::lround(std::clamp(sample.Rgb[c], 0.0f, 1.0f) * kByteMaximum)));
+                    }
+                }
+                passed = CompareGpuWithCpu(std::string("tile/") + desc.Name + "/" + std::to_string(boundaryY), gpu, cpu) && passed;
+                passed = glGetError() == GL_NO_ERROR && passed;
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            }
+            textures.PrepareForDraw(&image, {0, 0, 0, 0});
+            FTextureViewRegion unused;
+            passed = !textures.GetDrawRegion(0, unused) && !textures.UpdateFromImageData(&image) && passed;
+        }
+        std::printf("Tiled fallback / boundary sampling / visibility: %s\n", passed ? "OK" : "**FAIL**");
+        return passed;
+    }
+
+    bool ValidateTexturePolicy()
+    {
+        FImageData image;
+        image.SetFormat(EImageFormat::RGB10A2);
+        image.SetSize(kTestWidth, kTestHeight);
+        image.AllocatePixelData(FImageFormatDesc::CalculateFrameSize(image.GetFormat(), kTestWidth, kTestHeight, 0));
+        FTextureData textures;
+        FTextureLoadOptions options;
+        options.SparseDimensionThreshold = std::max(kTestWidth, kTestHeight) + 1;
+        bool passed = textures.CreateFromImageData(&image, nullptr, options) &&
+            !textures.HasTiledTextures() && !textures.HasSparseTextures();
+        // Equality keeps the whole-image path; only a strictly longer edge prefers sparse.
+        options.SparseDimensionThreshold = std::max(kTestWidth, kTestHeight);
+        passed = textures.CreateFromImageData(&image, nullptr, options) &&
+            !textures.HasTiledTextures() && !textures.HasSparseTextures() && passed;
+        // RGB10_A2 cannot build an averaged sparse preview, even on sparse-capable GPUs.
+        // Above the threshold, its sparse attempt must fall back to tiles instead of a whole texture.
+        options.SparseDimensionThreshold = std::max(kTestWidth, kTestHeight) - 1;
+        passed = textures.CreateFromImageData(&image, nullptr, options) && textures.HasTiledTextures() && passed;
+        options.bEnableSparseTextures = false;
+        passed = textures.CreateFromImageData(&image, nullptr, options) &&
+            !textures.HasTiledTextures() && !textures.HasSparseTextures() && passed;
+        std::printf("Texture policy: %s\n", passed ? "OK" : "**FAIL**");
+        return passed;
+    }
+
     bool ValidateAllShaderPrograms()
     {
         bool passed = true;
@@ -2732,6 +3089,10 @@ int main()
         }
         else
         {
+            if (!ValidateSparseTextureResidency(quad, target)) ++gFailures;
+            if (!ValidateSparsePreview(quad, target)) ++gFailures;
+            if (!ValidateTiledFallback(quad, target)) ++gFailures;
+            if (!ValidateTexturePolicy()) ++gFailures;
             const std::vector<FRenderCase> cases =
                 BuildCases();
             int32_t passedCases = 0;

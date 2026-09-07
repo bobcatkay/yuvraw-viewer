@@ -1,9 +1,13 @@
 #include "FLocalization.h"
 #include "FAsyncImageLoader.h"
+#include "FUserSettings.h"
 
 #include "Image/FImageFormatDesc.h"
+#include "Image/FImageLimits.h"
 #include "Image/FImageLoader.h"
 #include "Image/FResolutionGuess.h"
+#include "gl/FTexture.h"
+#include "gl/FSparseTexture.h"
 #include "Util.h"
 
 #include <glad/glad.h>
@@ -17,6 +21,7 @@
 #include <filesystem>
 #include <functional>
 #include <mutex>
+#include <new>
 #include <thread>
 #include <utility>
 
@@ -26,7 +31,7 @@ namespace
     constexpr int32_t kHiddenContextHeight = 1;
     constexpr int32_t kFallbackContextMajorVersion = 3;
     constexpr int32_t kFallbackContextMinorVersion = 3;
-    constexpr size_t kLoadErrorBufferSize = 192;
+    constexpr size_t kLoadErrorBufferSize = 384;
 
     using FContinuePredicate = std::function<bool()>;
 
@@ -166,6 +171,7 @@ namespace
         FImageLoadResult result;
         result.RequestId = Request.RequestId;
         result.Target = Request.Target;
+        result.TextureLoadOptions = Request.TextureLoadOptions;
         result.FilePath = Request.FilePath;
         result.AttemptCount = static_cast<int32_t>(Request.Attempts.size());
         result.Timings.QueueWaitMilliseconds = Request.EnqueuedAt.time_since_epoch().count() != 0
@@ -232,6 +238,17 @@ namespace
 
             if (!decoded || !decoded->IsValid())
             {
+                if (loadError == EImageLoadError::ResourceLimit)
+                {
+                    char buffer[kLoadErrorBufferSize] = {};
+                    std::snprintf(buffer, sizeof(buffer),
+                        FLocalization::Text(EUiText::ImageResourceLimitDetails),
+                        FImageLimits::kMaximumDimension,
+                        FImageLimits::kMaximumPixelCount / FImageLimits::kUnitsPerMebi,
+                        FImageLimits::kMaximumFrameBytes / FImageLimits::kUnitsPerMebi);
+                    result.LastError = buffer;
+                    continue;
+                }
                 // RAW 截断保留实际字节数提示，其余使用加载器给出的准确失败类别。
                 result.LastError = loadError != EImageLoadError::None &&
                     !(loadError == EImageLoadError::TruncatedData && !bSelfDescribing)
@@ -338,6 +355,8 @@ namespace
             { "glTexParameteri", reinterpret_cast<GLFWglproc>(glad_glTexParameteri) },
             { "glPixelStorei", reinterpret_cast<GLFWglproc>(glad_glPixelStorei) },
             { "glTexImage2D", reinterpret_cast<GLFWglproc>(glad_glTexImage2D) },
+            { "glGetIntegerv", reinterpret_cast<GLFWglproc>(glad_glGetIntegerv) },
+            { "glGetTexParameteriv", reinterpret_cast<GLFWglproc>(glad_glGetTexParameteriv) },
             { "glGetError", reinterpret_cast<GLFWglproc>(glad_glGetError) },
             { "glFenceSync", reinterpret_cast<GLFWglproc>(glad_glFenceSync) },
             { "glClientWaitSync", reinterpret_cast<GLFWglproc>(glad_glClientWaitSync) },
@@ -415,6 +434,7 @@ public:
 
         MainWindow = InMainWindow;
         TryCreateSharedContext();
+        bSparseTexturesAvailable = FSparseTexture::IsSupported();
 
         try
         {
@@ -715,6 +735,29 @@ private:
                 continue;
             }
 
+            // 已知优先稀疏时提前在后台生成预览；即使没有共享 Context 也不把这部分 CPU 工作挪到 UI。
+            // 未超过阈值先试普通整图，只有上传失败后才由 FTextureData 解除 Context 并准备回退预览。
+            if (ready.Result.HasDecodedImage() && bSparseTexturesAvailable &&
+                ready.Result.TextureLoadOptions.PrefersSparse(
+                    ready.Result.ImageData->GetWidth(), ready.Result.ImageData->GetHeight()))
+            {
+                const auto previewStart = std::chrono::steady_clock::now();
+                try
+                {
+                    ready.Result.TextureData = std::make_unique<FTextureData>();
+                    ready.Result.TextureData->PrepareSparsePreview(ready.Result.ImageData.get(),
+                        [this, requestId]() { return IsLatest(requestId); });
+                }
+                catch (const std::exception& exception)
+                {
+                    ready.Result.TextureData.reset();
+                    LOGW("TextureLoad", "Background preview preparation failed: %s", exception.what());
+                }
+                ready.Result.Timings.TexturePreviewMilliseconds =
+                    ToMilliseconds(std::chrono::steady_clock::now() - previewStart);
+            }
+            if (!IsLatest(ready.Result.RequestId)) continue;
+
             // 上传和失败回收（glDeleteSync / glDeleteTextures）都要 Context，
             // 所以持有区间必须覆盖本轮末尾的发布与丢弃分支。
             const FScopedUploadContext uploadContext(
@@ -729,11 +772,18 @@ private:
                     if (bSharedUploadAvailable && UploadWindow)
                     {
                         const auto uploadStart = std::chrono::steady_clock::now();
-                        ready.Result.TextureData = std::make_unique<FTextureData>();
+                        if (!ready.Result.TextureData)
+                            ready.Result.TextureData = std::make_unique<FTextureData>();
+                        FTextureCreateError textureError;
                         const bool bUploaded = ready.Result.TextureData->CreateFromImageData(
-                            ready.Result.ImageData.get());
+                            ready.Result.ImageData.get(), &textureError, ready.Result.TextureLoadOptions,
+                            [this, requestId]() { return IsLatest(requestId); });
+                        const int64_t previewMilliseconds =
+                            ready.Result.TextureData->GetPreviewPreparationMilliseconds();
+                        ready.Result.Timings.TexturePreviewMilliseconds += previewMilliseconds;
                         ready.Result.Timings.WorkerUploadMilliseconds =
-                            ToMilliseconds(std::chrono::steady_clock::now() - uploadStart);
+                            std::max<int64_t>(0, ToMilliseconds(std::chrono::steady_clock::now() - uploadStart)
+                                - previewMilliseconds);
 
                         if (bUploaded && ready.Result.TextureData->IsValid())
                         {
@@ -754,6 +804,7 @@ private:
                         }
                         else
                         {
+                            ready.Result.LastError = textureError.GetText();
                             ready.Result.TextureData.reset();
                             ready.Result.bNeedsMainThreadUpload = true;
                             LOGW(
@@ -844,6 +895,7 @@ private:
     bool bInitialized = false;
     bool bStopping = false;
     bool bSharedUploadAvailable = false;
+    bool bSparseTexturesAvailable = false;
 };
 
 FAsyncImageLoader::FAsyncImageLoader()
@@ -863,6 +915,8 @@ bool FAsyncImageLoader::Initialize(GLFWwindow* MainWindow)
 
 uint64_t FAsyncImageLoader::Submit(FImageLoadRequest Request)
 {
+    // 设置存储只在主线程访问；后台与主线程回退共用不可变的请求快照。
+    Request.TextureLoadOptions = FUserSettings::GetTextureLoadOptions();
     return Impl ? Impl->Submit(std::move(Request)) : 0;
 }
 
@@ -899,6 +953,7 @@ bool FAsyncImageLoader::IsSharedUploadAvailable() const
 
 FImageLoadResult FAsyncImageLoader::DecodeOnCallingThread(FImageLoadRequest Request)
 {
+    Request.TextureLoadOptions = FUserSettings::GetTextureLoadOptions();
     if (Request.EnqueuedAt.time_since_epoch().count() == 0)
     {
         Request.EnqueuedAt = std::chrono::steady_clock::now();
@@ -947,13 +1002,25 @@ bool FAsyncImageLoader::UploadTextureOnCallingThread(FImageLoadResult& Result)
 
     const auto uploadStart = std::chrono::steady_clock::now();
     std::unique_ptr<FTextureData> textureData;
+    FTextureCreateError textureError;
     bool bUploaded = false;
+    // 回退上传按主 Context 的实际结果报告，不能残留共享 Context 的失败原因。
+    Result.LastError.clear();
 
     try
     {
-        textureData = std::make_unique<FTextureData>();
-        bUploaded = textureData->CreateFromImageData(Result.ImageData.get()) &&
+        textureData = std::move(Result.TextureData);
+        if (!textureData)
+        {
+            textureData = std::make_unique<FTextureData>();
+        }
+        bUploaded = textureData->CreateFromImageData(Result.ImageData.get(), &textureError, Result.TextureLoadOptions) &&
             textureData->IsValid();
+    }
+    catch (const std::bad_alloc&)
+    {
+        Result.LastError = FLocalization::Text(EUiText::ImageOutOfMemory);
+        LOGE("AsyncImageLoader", "%s", "CPU allocation failed while preparing main-context texture upload");
     }
     catch (const std::exception& exception)
     {
@@ -970,12 +1037,17 @@ bool FAsyncImageLoader::UploadTextureOnCallingThread(FImageLoadResult& Result)
             "Main-context texture upload threw an unknown exception");
     }
 
-    Result.Timings.MainUploadMilliseconds =
-        ToMilliseconds(std::chrono::steady_clock::now() - uploadStart);
+    const int64_t previewMilliseconds = textureData ? textureData->GetPreviewPreparationMilliseconds() : 0;
+    Result.Timings.TexturePreviewMilliseconds += previewMilliseconds;
+    Result.Timings.MainUploadMilliseconds = std::max<int64_t>(0,
+        ToMilliseconds(std::chrono::steady_clock::now() - uploadStart) - previewMilliseconds);
 
     if (!bUploaded)
     {
-        Result.LastError = FLocalization::Text(EUiText::TextureCreationFailed);
+        if (Result.LastError.empty())
+        {
+            Result.LastError = textureError.GetText();
+        }
         Result.TextureData.reset();
         Result.bNeedsMainThreadUpload = false;
         return false;

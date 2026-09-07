@@ -19,10 +19,16 @@
    **不能访问文档或面板**。
 2. 异步加载器最多保留一个执行中的请求和一个最新待处理请求；新请求覆盖尚未执行的待处理请求。新请求提升代际，旧请求即使已开始解码
    也不得上传或提交，避免连续按方向键时积压几十张大图。
-3. 专用线程先将图像解码为内存中的像素数据；隐藏 GLFW 窗口与主窗口共享 OpenGL share group，成功时在该
+3. 专用线程先将图像解码为内存中的像素数据；`Submit` 在主线程快照 `FUserSettings` 的纹理策略，
+   结果保留相同快照供主线程重试。`FTextureData` 按策略选择整图/稀疏/分块；仅尝试稀疏时准备
+   可取消的分平面预览。优先稀疏时在后台绑定 Context 之前生成（无共享上传也如此）；
+   普通整图失败后的预览准备由 `FTextureData` 用 RAII 解除/恢复 Context，不能长占隐藏 Context。
+   隐藏 GLFW 窗口与主窗口共享 OpenGL share group，成功时在该
    Context 上新建一套纹理。绝不能原地修改仍在渲染的旧纹理。
 4. 本项目 GLAD 使用进程级函数表。隐藏 Context 必须逐项确认上传/同步函数地址与主 Context
-   的 GLAD 表一致；不一致或隐藏 Context 创建失败时，安全降级为“后台解码 + 主线程上传”。
+   的 GLAD 表一致（含尺寸/稀疏层查询使用的 `glGetIntegerv`、`glGetTexParameteriv`）；不一致或隐藏 Context 创建失败时，
+   安全降级为“后台解码 + 主线程上传”。
+   稀疏扩展函数由 `FSparseTexture` 按 Context 私有加载，不得在工作线程重新加载全局 GLAD。
 5. 后台上传后执行 `glFenceSync`，紧接 `glFlush`；主线程 `Poll` 用零超时
    `glClientWaitSync`，未就绪就留到下一帧，不能阻塞等待。fence 创建失败只允许在工作线程
    `glFinish`，fence 等待失败则丢弃后台纹理并在主 Context 重建。
@@ -32,9 +38,9 @@
 7. 差值/导出的 `FAsyncJob` 会直接读取文档像素。它运行时允许图片线程继续准备，但主线程
    必须推迟提交，直到 `FAsyncJob::Poll` 完成。主图尚未准备时的对比图请求则保留一个最新
    延后意图，不能反过来取消主图（命令行 `主图 + --compare` 依赖此规则）。
-8. 每次完成日志记录 queue / inspect / decode / worker upload / main fallback / commit / total；
+8. 每次完成日志记录 backend / queue / inspect / decode / preview CPU / worker upload submit / main fallback submit / commit / total；
    直方图只对超过一帧预算的刷新做限频日志。排查卡顿先看阶段数据，不要猜。
-9. 隐藏上传 Context 不能在工作线程整个生命周期里保持 current。CPU 解码且确认请求仍有效后，
+9. 隐藏上传 Context 不能在工作线程整个生命周期里保持 current。CPU 解码、可提前生成的预览且确认请求仍有效后，
    才在覆盖纹理上传、fence 和失败/过期资源回收的 RAII 作用域内绑定，离开本轮任务前立即解绑；
    条件变量等待与下一轮解码期间不得占用它。实测 Intel UHD 770 在同一 share group 的两个
    Context 长期分别 current 于两个线程时，主线程可能卡死在 `wglMakeCurrent`。同理，ImGui
@@ -43,6 +49,10 @@
 `FAsyncImageLoader::Shutdown()` 必须在 LoaderFactory、文档和主 Context 仍有效时执行：先提升
 取消代际、唤醒并 join 工作线程，再在主 Context 删除待提交纹理/fence，最后销毁隐藏窗口。
 任何共享 GL 资源都必须遵守这个所有权顺序。
+
+无共享上传能力时，CPU 预览随 `FTextureData` 一起进入主线程回退，不能只因尚无 GPU 纹理就丢弃。
+后台创建/同步失败后重试可重新准备预览；绘制期间原图页按可见区上传，并用独立的使用 fence
+协调 ImGui 多视口 Context。CPU 预览准备对象不持有 GL 资源，可在取消时由工作线程直接销毁。
 
 ## 退出生命周期
 

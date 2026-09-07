@@ -1,4 +1,5 @@
 #pragma once
+#include "gl/FTextureLoadOptions.h"
 
 #include "Image/FImageLoadParams.h"
 #include "FLocalization.h"
@@ -20,6 +21,10 @@
  */
 namespace FUserSettings
 {
+    FTextureLoadOptions GetTextureLoadOptions();
+    /// 保存失败保留原策略；正在加载的请求继续使用提交时的快照。
+    bool SetTextureLoadOptions(FTextureLoadOptions Options);
+
     FLocalization::ELanguage GetLanguage();
     /// 保存成功后才生效；失败时保留原语言，调用方可显示失败提示。
     bool SetLanguage(FLocalization::ELanguage Language);

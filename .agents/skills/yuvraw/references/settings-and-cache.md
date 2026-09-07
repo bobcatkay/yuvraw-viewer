@@ -13,6 +13,13 @@
 
 ## 用户数据迁移
 
+纹理策略保存为 `SparseTexturesEnabled=1/0` 和 `SparseTextureDimensionThreshold=<像素>`，
+缺失默认启用、16384；非法值忽略，正数阈值限制在 1–65535。设置弹窗只编辑草稿，应用时
+`SetTextureLoadOptions()` 原子保存两项，失败回滚内存值；取消不生效，清除全部数据恢复默认。
+应用影响下一次打开或重新加载，已提交请求与现有图像不切换后端。后台不能访问设置存储，
+`FAsyncImageLoader::Submit` / 同步解码入口在主线程快照，主线程上传回退使用结果里的同一快照。
+具体回退顺序见 [纹理与渲染](rendering.md#大图预览与稀疏页面)。
+
 界面语言用 `Language=zh-CN` 或 `Language=en-US` 保存在 `settings.ini`。
 缺失或未知值回退英文，已有 zh-CN 选择不受默认值变化影响；`SetLanguage()` 保存失败时回滚内存值并返回 false。
 设置弹窗仅在应用成功后调用 `FLocalization::SetLanguage()`，取消不改变语言；

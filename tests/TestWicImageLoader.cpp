@@ -115,7 +115,8 @@ int main()
     }
     struct FGeometry { const char* Name; uint32_t Width; uint32_t Height; };
     constexpr uint32_t kLargeWidth = 16384;
-    constexpr uint32_t kLargeHeight = 8193;
+    constexpr uint32_t kLargeHeight = static_cast<uint32_t>(
+        FImageLimits::kMaximumPixelCount / static_cast<size_t>(kLargeWidth)) + 1;
     const FGeometry geometries[] = {
         {"dimension_limit.tiff", static_cast<uint32_t>(FImageLimits::kMaximumDimension) + 1, 1},
         {"pixel_limit.tiff", kLargeWidth, kLargeHeight},

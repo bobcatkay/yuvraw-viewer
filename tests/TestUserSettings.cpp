@@ -21,6 +21,7 @@ namespace
 {
     constexpr size_t kAdditionalRecentFileCount = 3;
     constexpr size_t kTestImageConfigCacheCapacity = 37;
+    constexpr int32_t kTestSparseThreshold = 8192;
     constexpr bool kTestHistogramOverlayEnabled = false;
     constexpr bool kTestHistogramLogScaleEnabled = true;
     constexpr FUserSettings::ECompareMode kTestCompareMode =
@@ -234,6 +235,9 @@ namespace
 
     int VerifyPopulatedSettings()
     {
+        const auto textures = FUserSettings::GetTextureLoadOptions();
+        Check(!textures.bEnableSparseTextures && textures.SparseDimensionThreshold == kTestSparseThreshold,
+            "texture policy survives a fresh process and unrelated setting changes");
         Check(FUserSettings::GetLanguage() == FLocalization::ELanguage::English,
             "English survives a fresh process and other preference changes");
         FUserSettings::FWindowPlacement placement;
@@ -322,6 +326,10 @@ namespace
 
     int VerifyClearedSettings()
     {
+        const auto textures = FUserSettings::GetTextureLoadOptions();
+        Check(textures.bEnableSparseTextures &&
+            textures.SparseDimensionThreshold == FTextureLoadOptions::kDefaultSparseDimensionThreshold,
+            "cleared or invalid texture settings use enabled / 16K defaults");
         Check(FUserSettings::GetLanguage() == FLocalization::kDefaultLanguage,
             "clear all restores the default language in a fresh process");
         FUserSettings::FWindowPlacement placement;
@@ -457,6 +465,26 @@ int main(int ArgCount, char** Arguments)
 
     Check(FUserSettings::GetLanguage() == FLocalization::kDefaultLanguage,
         "missing language uses English");
+    const auto defaults = FUserSettings::GetTextureLoadOptions();
+    const auto threshold = FTextureLoadOptions::kDefaultSparseDimensionThreshold;
+    Check(defaults.bEnableSparseTextures && defaults.SparseDimensionThreshold == threshold,
+        "missing texture settings enable sparse textures at 16K");
+    Check(!defaults.PrefersSparse(threshold - 1, 1) && !defaults.PrefersSparse(threshold, 1) &&
+        !defaults.PrefersSparse(1, threshold) && defaults.PrefersSparse(threshold + 1, 1) &&
+        defaults.PrefersSparse(1, threshold + 1), "sparse preference requires the longest edge to strictly exceed the threshold");
+    auto textures = defaults;
+    textures.SparseDimensionThreshold = 0;
+    textures.Normalize();
+    Check(textures.SparseDimensionThreshold == FTextureLoadOptions::kMinimumSparseDimensionThreshold,
+        "texture threshold lower bound is normalized");
+    textures.SparseDimensionThreshold = FTextureLoadOptions::kMaximumSparseDimensionThreshold + 1;
+    textures.Normalize();
+    Check(textures.SparseDimensionThreshold == FTextureLoadOptions::kMaximumSparseDimensionThreshold,
+        "texture threshold upper bound is normalized");
+    textures.bEnableSparseTextures = false;
+    textures.SparseDimensionThreshold = kTestSparseThreshold;
+    Check(!textures.PrefersSparse(threshold, threshold) && FUserSettings::SetTextureLoadOptions(textures),
+        "disabled sparse policy is persisted regardless of image size");
     Check(FUserSettings::SetLanguage(FLocalization::ELanguage::English),
         "English language preference can be saved");
     Check(FUserSettings::SetLanguage(FLocalization::ELanguage::SimplifiedChinese) &&
@@ -620,6 +648,10 @@ int main(int ArgCount, char** Arguments)
 
     if (lockedSettings != INVALID_HANDLE_VALUE)
     {
+        Check(!FUserSettings::SetTextureLoadOptions(FTextureLoadOptions{}) &&
+            !FUserSettings::GetTextureLoadOptions().bEnableSparseTextures &&
+            FUserSettings::GetTextureLoadOptions().SparseDimensionThreshold == kTestSparseThreshold,
+            "failed texture policy save rolls back both in-memory settings");
         Check(!FUserSettings::SetLanguage(FLocalization::ELanguage::SimplifiedChinese) &&
             FUserSettings::GetLanguage() == FLocalization::ELanguage::English,
             "failed language save rolls back the in-memory preference");
@@ -764,7 +796,8 @@ int main(int ArgCount, char** Arguments)
 
     {
         std::ofstream invalidLanguageFile(settingsPath);
-        invalidLanguageFile << "Language=unsupported-language\n";
+        invalidLanguageFile << "Language=unsupported-language\n"
+            << "SparseTexturesEnabled=invalid\nSparseTextureDimensionThreshold=-1\n";
     }
     Check(RunChild(executable, kVerifyClearedMode) == 0,
         "unsupported language in an otherwise empty file falls back to English");

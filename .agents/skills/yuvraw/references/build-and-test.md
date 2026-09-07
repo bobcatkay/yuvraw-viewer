@@ -181,7 +181,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File tests/run_gl_format_validation.ps1
 ```
 
 脚本先创建第二个隐藏共享 Context，验证工作线程建纹理、`fence + flush` 交接和主 Context
-可见性；随后跑三组格式/色彩用例：
+可见性；支持 `ARB_sparse_texture` 的 GPU 还验证页面预算与回收、非整纹素 stride、unpack/PBO
+状态恢复、非页对齐边缘的实际 GLSL 采样，以及可取消预览和高清交接；不支持时明确跳过这些用例。
+普通分块用超过实际 GPU 边长的细长图覆盖多平面/打包/Bayer/RGB16 padding、每个块边界与尾块的
+GPU/CPU 采样比对及可见性；RGB10_A2 用例覆盖低于、等于、超过阈值及禁用稀疏时的后端顺序。
+`TestUserSettings` 覆盖开关/阈值跨进程保存、边界、清除、非法配置和写入失败回滚。
+随后跑三组格式/色彩用例：
 
 | 组 | 覆盖 | CPU 真值来源 | 目标 |
 |---|---|---|---|

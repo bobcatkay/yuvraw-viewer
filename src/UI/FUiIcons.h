@@ -30,6 +30,9 @@ namespace FUiIcons
      */
     bool FolderButton(const char* Id);
 
+    /** 恢复默认值的方形图标按钮；Size 为已缩放像素，0 表示当前控件行高。 */
+    bool ResetButton(const char* Id, const char* Tooltip, float Size = 0.0f);
+
     /**
      * 图像查看器使用的小图标
      *

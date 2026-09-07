@@ -1282,7 +1282,7 @@ void FMainDockSpace::CompleteImageLoad(FImageLoadResult Result)
         "AsyncImageLoader",
         "Request %llu complete: target=%s success=%d size=%dx%d bytes=%llu "
         "attempt=%d/%d source=%s cache=%d shared=%d queue=%lldms inspect=%lldms "
-        "decode=%lldms workerUpload=%lldms mainUpload=%lldms worker=%lldms "
+        "backend=%s decode=%lldms previewCpu=%lldms workerUploadSubmit=%lldms mainUploadSubmit=%lldms worker=%lldms "
         "commit=%lldms total=%lldms",
         static_cast<unsigned long long>(completedRequestId),
         ImageLoadTargetName(pending.Target),
@@ -1299,7 +1299,9 @@ void FMainDockSpace::CompleteImageLoad(FImageLoadResult Result)
         bSharedUploadUsed ? 1 : 0,
         static_cast<long long>(timings.QueueWaitMilliseconds),
         static_cast<long long>(timings.InspectionMilliseconds),
+        bCommitted && target->GetTextureData() ? target->GetTextureData()->GetBackendName() : "none",
         static_cast<long long>(timings.DecodeMilliseconds),
+        static_cast<long long>(timings.TexturePreviewMilliseconds),
         static_cast<long long>(timings.WorkerUploadMilliseconds),
         static_cast<long long>(timings.MainUploadMilliseconds),
         static_cast<long long>(timings.WorkerTotalMilliseconds),
@@ -2695,10 +2697,10 @@ void FMainDockSpace::RenderThemeSettings()
             ImGui::CalcTextSize(FLocalization::Text(definition.Label)).x);
     }
     const auto& style = ImGui::GetStyle();
+    const float resetButtonSize = FUiScale::Apply(kSettingsThemeColorSwatchHeight);
     // Include child padding and every table cell so neither language loses the end of a label.
     const float requiredListWidth = maximumLabelWidth
-        + ImGui::CalcTextSize(FLocalization::Text(EUiText::Reset)).x
-        + style.FramePadding.x * 2.0f
+        + resetButtonSize
         + FUiScale::Apply(kSettingsThemeColorSwatchWidth)
         + style.WindowPadding.x * 2.0f
         + style.CellPadding.x * 2.0f * kSettingsThemeColorTableColumnCount;
@@ -2725,7 +2727,8 @@ void FMainDockSpace::RenderThemeSettings()
                 FUiScale::Apply(kSettingsThemeColorSwatchWidth));
             ImGui::TableSetupColumn(
                 "##ThemeColorReset",
-                ImGuiTableColumnFlags_WidthFixed);
+                ImGuiTableColumnFlags_WidthFixed,
+                resetButtonSize);
 
             for (const FThemeColorUiDefinition& definition :
                  kThemeColorUiDefinitions)
@@ -2768,9 +2771,10 @@ void FMainDockSpace::RenderThemeSettings()
                 }
 
                 ImGui::TableSetColumnIndex(2);
-                if (CenteredTextButton(
-                        FLocalization::Text(EUiText::Reset),
-                        ImVec2(0.0f, rowHeight)))
+                if (FUiIcons::ResetButton(
+                        "##ResetThemeColor",
+                        FLocalization::Text(EUiText::RestoreDefault),
+                        resetButtonSize))
                 {
                     SettingsThemePaletteDraft.Get(definition.Role) =
                         FUserSettings::kDefaultThemePalette.Get(
@@ -2823,6 +2827,7 @@ void FMainDockSpace::RenderSettingsPopup()
 {
     if (bRequestSettingsPopup)
     {
+        SettingsTextureLoadOptionsDraft = FUserSettings::GetTextureLoadOptions();
         SettingsLanguageDraft = FUserSettings::GetLanguage();
         SettingsCacheCapacityDraft =
             static_cast<int32_t>(ImageConfigCache.GetCapacity());
@@ -2885,6 +2890,24 @@ void FMainDockSpace::RenderSettingsPopup()
             ? FLocalization::ELanguage::English : FLocalization::ELanguage::SimplifiedChinese;
     }
     ImGui::TextDisabled("%s", FLocalization::Text(EUiText::LanguageApplyHelp));
+
+    ImGui::Spacing();
+    ImGui::Checkbox(FLocalization::Text(EUiText::EnableSparseTextures),
+        &SettingsTextureLoadOptionsDraft.bEnableSparseTextures);
+    ImGui::BeginDisabled(!SettingsTextureLoadOptionsDraft.bEnableSparseTextures);
+    ImGui::TextWrapped("%s", FLocalization::Text(EUiText::SparseTextureDimensionThreshold));
+    ImGui::SetNextItemWidth(FUiScale::Apply(kSettingsCacheInputWidth));
+    ImGui::InputInt("##SparseTextureDimensionThreshold", &SettingsTextureLoadOptionsDraft.SparseDimensionThreshold,
+        0, 0);
+    ImGui::SameLine();
+    if (FUiIcons::ResetButton("##ResetSparseTextureDimensionThreshold",
+            FLocalization::Text(EUiText::RestoreDefault)))
+    {
+        SettingsTextureLoadOptionsDraft.SparseDimensionThreshold =
+            FTextureLoadOptions::kDefaultSparseDimensionThreshold;
+    }
+    ImGui::EndDisabled();
+    ImGui::Spacing();
 
     RenderThemeSettings();
 
@@ -2967,6 +2990,14 @@ void FMainDockSpace::RenderSettingsPopup()
             return;
         }
         FLocalization::SetLanguage(SettingsLanguageDraft);
+        SettingsTextureLoadOptionsDraft.Normalize();
+        if (!FUserSettings::SetTextureLoadOptions(SettingsTextureLoadOptionsDraft))
+        {
+            FToast::Show(FLocalization::Text(EUiText::TextureSettingsSaveFailed));
+            ImGui::EndPopup();
+            ImGui::PopStyleVar(kSettingsStyleVarCount);
+            return;
+        }
         const int32_t nonNegativeDraft =
             std::max(0, SettingsCacheCapacityDraft);
         const size_t capacity = std::min(
@@ -3064,6 +3095,7 @@ void FMainDockSpace::ClearStoredData(bool bOnlyImagePropertyCache)
     }
 
     const bool bPersistentDataCleared = FUserSettings::ClearAllData();
+    SettingsTextureLoadOptionsDraft = FUserSettings::GetTextureLoadOptions();
     SettingsLanguageDraft = FUserSettings::GetLanguage();
     FLocalization::SetLanguage(SettingsLanguageDraft);
     ReloadThemePaletteDraft();

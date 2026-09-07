@@ -51,6 +51,7 @@ struct FImageLoadRequest
     EImageLoadTarget Target = EImageLoadTarget::Main;
     std::string FilePath;
     std::vector<FImageLoadAttempt> Attempts;
+    FTextureLoadOptions TextureLoadOptions;
     std::chrono::steady_clock::time_point EnqueuedAt;
 };
 
@@ -60,6 +61,7 @@ struct FImageLoadTimings
     int64_t QueueWaitMilliseconds = 0;
     int64_t InspectionMilliseconds = 0;
     int64_t DecodeMilliseconds = 0;
+    int64_t TexturePreviewMilliseconds = 0;
     int64_t WorkerUploadMilliseconds = 0;
     int64_t MainUploadMilliseconds = 0;
     int64_t WorkerTotalMilliseconds = 0;
@@ -79,6 +81,7 @@ struct FImageLoadResult
     std::string FilePath;
     FImageLoadParams Params;
     uint64_t FileSize = 0;
+    FTextureLoadOptions TextureLoadOptions;
     std::string LastError;
     std::string ParameterSource;
 

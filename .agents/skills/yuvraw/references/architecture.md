@@ -56,7 +56,9 @@ src/
     FToast                 瞬时提示（"已复制到剪切板"这类回执），前景绘制列表，同时只留一条
   gl/
     FTexture               单个 GL 纹理封装（含 stride/对齐处理）
-    FTextureData           **按格式描述表**建多平面纹理，无按格式分支
+    FTextureData           按策略创建普通整图/稀疏/分块多平面纹理；预览、可见页预算和跨 Context 绘制同步
+    FTextureLoadOptions    无 GL/UI 依赖的请求策略快照：稀疏开关、最长边阈值
+    FSparseTexture         可选 ARB_sparse_texture 后端：虚拟页几何、提交/回收、页内 stride 重排
     FShader                着色器程序封装
     FShaderManager         按 EImageFormat 缓存着色器（单例）
     FShaders.h             全部 GLSL 源码

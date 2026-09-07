@@ -7,6 +7,7 @@
 #include "gl/FShaderManager.h"
 #include "gl/FShaders.h"
 #include "gl/FTextureData.h"
+#include "gl/FSparseTexture.h"
 #include "Image/FColorTransform.h"
 #include "Image/FImageData.h"
 #include "Image/FImageFormatDesc.h"
@@ -1768,6 +1769,46 @@ void FImageViewer::RenderPaneOverlay(
     ImGui::PopID();
 }
 
+namespace
+{
+    FTextureViewRegion GetVisibleTextureRegion(const ImVec2& Position, const ImVec2& Size,
+        const ImVec2& ClipMin, const ImVec2& ClipMax, const ImVec2& FramebufferScale,
+        const FImageViewSettings& Settings)
+    {
+        // scissor 转为整数时可能向外覆盖一个 framebuffer 像素；缩小时它会对应多个源像素。
+        const float guardX = FramebufferScale.x > 0.0f ? 1.0f / FramebufferScale.x : 1.0f;
+        const float guardY = FramebufferScale.y > 0.0f ? 1.0f / FramebufferScale.y : 1.0f;
+        const float left = std::max(Position.x, ClipMin.x - guardX), top = std::max(Position.y, ClipMin.y - guardY);
+        const float right = std::min(Position.x + Size.x, ClipMax.x + guardX);
+        const float bottom = std::min(Position.y + Size.y, ClipMax.y + guardY);
+        if (Size.x <= 0 || Size.y <= 0 || right <= left || bottom <= top) return {0, 0, 0, 0};
+        FTextureViewRegion region{1, 1, 0, 0};
+        for (int32_t y = 0; y < 2; ++y)
+        {
+            for (int32_t x = 0; x < 2; ++x)
+            {
+                float u = ((x == 0 ? left : right) - Position.x) / Size.x;
+                float v = ((y == 0 ? top : bottom) - Position.y) / Size.y;
+                // 与像素探针相同的逆变换：先撤销旋转，再撤销镜像。
+                switch (Settings.RotationQuarters)
+                {
+                case kClockwiseQuarterStep: { const float oldU = u; u = v; v = 1.0f - oldU; break; }
+                case kHalfTurnQuarterSteps: u = 1.0f - u; v = 1.0f - v; break;
+                case kQuarterTurnsPerCircle - kClockwiseQuarterStep: { const float oldU = u; u = 1.0f - v; v = oldU; break; }
+                default: break;
+                }
+                if (Settings.bFlipH) u = 1.0f - u;
+                if (Settings.bFlipV) v = 1.0f - v;
+                region.MinU = std::min(region.MinU, u);
+                region.MinV = std::min(region.MinV, v);
+                region.MaxU = std::max(region.MaxU, u);
+                region.MaxV = std::max(region.MaxV, v);
+            }
+        }
+        return region;
+    }
+}
+
 void FImageViewer::IssueDrawCallback(
     FImageDocument* Doc,
     const ImVec2& RenderPos,
@@ -1791,6 +1832,8 @@ void FImageViewer::IssueDrawCallback(
     }
 
     const EImageFormat currentFormat = imageData->GetFormat();
+    // 失败只在下一帧的 UI 构建阶段记录一次，不在 GL 绘制回调中打印。
+    textureData->LogPendingDrawEvents();
 
     // 从着色器管理器获取当前格式的着色器
     FShader* shader = FShaderManager::Get().GetShaderForFormat(currentFormat);
@@ -1808,6 +1851,7 @@ void FImageViewer::IssueDrawCallback(
         ImVec2 RenderSize;
         ImVec2 ClipMin;
         ImVec2 ClipMax;
+        FTextureViewRegion VisibleRegion;
 
         // 色彩转换参数在这里算好，回调里只负责喂给 uniform
         float   YuvToRgb[9];
@@ -1887,6 +1931,8 @@ void FImageViewer::IssueDrawCallback(
     callbackData.DisplayPos = windowViewport->Pos;
     callbackData.DisplaySize = windowViewport->Size;
     callbackData.FramebufferScale = ImGui::GetIO().DisplayFramebufferScale;
+    callbackData.VisibleRegion = GetVisibleTextureRegion(RenderPos, RenderSize, ClipMin, ClipMax,
+        callbackData.FramebufferScale, ViewSettings);
 
     // 色彩管线要知道往哪儿输出：SDR 后台缓冲和 scRGB fp16 的编码方式不同。
     // 显示器信息由呈现层持有，HDR 未启用时返回的默认值会让管线退回 SDR 分支
@@ -1927,6 +1973,19 @@ void FImageViewer::IssueDrawCallback(
 
         // 注意：这个回调每帧都会执行，**不要在这里打日志**
 
+        // 坐标基准来自所属视口，不能改用主视口的 ImGui::GetDrawData()。
+        const ImVec2 displayPos = data->DisplayPos;
+        const ImVec2 framebufferScale = data->FramebufferScale;
+        const int32_t fbWidth = static_cast<int32_t>(data->DisplaySize.x * framebufferScale.x);
+        const int32_t fbHeight = static_cast<int32_t>(data->DisplaySize.y * framebufferScale.y);
+        const float clipMinX = (data->ClipMin.x - displayPos.x) * framebufferScale.x;
+        const float clipMinY = (data->ClipMin.y - displayPos.y) * framebufferScale.y;
+        const float clipMaxX = (data->ClipMax.x - displayPos.x) * framebufferScale.x;
+        const float clipMaxY = (data->ClipMax.y - displayPos.y) * framebufferScale.y;
+        // 提前返回必须放在任何 GL 状态修改之前，包括保存纹理绑定时的 glActiveTexture。
+        if (fbWidth <= 0 || fbHeight <= 0 || clipMaxX <= clipMinX || clipMaxY <= clipMinY)
+            return;
+
         // 保存 OpenGL 状态（参考 ImGui_ImplOpenGL3 的实现）
         GLint lastProgram, lastArrayBuffer, lastVertexArray;
         GLint lastViewport[4], lastScissorBox[4];
@@ -1956,37 +2015,10 @@ void FImageViewer::IssueDrawCallback(
         glGetIntegerv(GL_BLEND_SRC_ALPHA, &lastBlendSrcAlpha);
         glGetIntegerv(GL_BLEND_DST_ALPHA, &lastBlendDstAlpha);
 
-        // 坐标基准取自 userdata（多视口/HiDPI 安全）。必须用所属视口的
-        // Pos / Size / FramebufferScale 而不是 io.DisplaySize，否则窗口一移动
-        // scissor 与 renderPos 就会漂移；也不能在这里调 ImGui::GetDrawData()，
-        // 那个函数返回的恒为主视口，面板被拖出主窗口后原点是错的。
-        const ImVec2 displayPos = data->DisplayPos;
-        const ImVec2 framebufferScale = data->FramebufferScale;
-        const int32_t fbWidth = (int32_t)(data->DisplaySize.x * framebufferScale.x);
-        const int32_t fbHeight = (int32_t)(data->DisplaySize.y * framebufferScale.y);
-
-        if (fbWidth <= 0 || fbHeight <= 0)
-        {
-            return;
-        }
-
         // 设置 OpenGL 状态
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glEnable(GL_SCISSOR_TEST);
-
-        // 将裁剪矩形从屏幕坐标转换为帧缓冲区坐标
-        // (与 ImGui_ImplOpenGL3_RenderDrawData 中处理 scissor 的方式保持一致)
-        float clipMinX = (data->ClipMin.x - displayPos.x) * framebufferScale.x;
-        float clipMinY = (data->ClipMin.y - displayPos.y) * framebufferScale.y;
-        float clipMaxX = (data->ClipMax.x - displayPos.x) * framebufferScale.x;
-        float clipMaxY = (data->ClipMax.y - displayPos.y) * framebufferScale.y;
-
-        // 空裁剪区域直接跳过（平铺模式下画布很窄时可能出现）
-        if (clipMaxX <= clipMinX || clipMaxY <= clipMinY)
-        {
-            return;
-        }
 
         // 设置视口和裁剪区域 (OpenGL 中 Y 轴是翻转的)
         glViewport(0, 0, fbWidth, fbHeight);
@@ -2044,8 +2076,8 @@ void FImageViewer::IssueDrawCallback(
 
         // 过滤方式要在 BindTextures 之前设置：SetMagFilterNearest 内部会 glBindTexture，
         // 随后的 BindTextures 会把各纹理单元的绑定重新摆正
+        textureData->PrepareForDraw(imageData, data->VisibleRegion);
         textureData->SetMagFilterNearest(data->bMagNearest);
-        textureData->BindTextures(0);
 
         // 采样器：纹理数量由格式描述表决定
         if (data->TextureCount >= 3)
@@ -2119,7 +2151,38 @@ void FImageViewer::IssueDrawCallback(
             reinterpret_cast<const void*>(2 * sizeof(float)));
         glEnableVertexAttribArray(1);
 
-        glDrawArrays(GL_TRIANGLES, 0, kQuadVertexCount);
+        const auto setPlaneCoordinates = [&](const char* ScaleUniform, const char* OffsetUniform,
+            uint32_t Plane, uint32_t DrawIndex) {
+            float x = 1.0f, y = 1.0f;
+            textureData->GetTextureCoordinateScale(Plane, x, y, DrawIndex);
+            shader->SetVec2(ScaleUniform, x, y);
+            textureData->GetTextureCoordinateOffset(Plane, x, y, DrawIndex);
+            shader->SetVec2(OffsetUniform, x, y);
+        };
+        // 每块只画核心区域，边缘冗余纹素仅用于滤波；完整图变换保证旋转和翻转一致。
+        for (uint32_t drawIndex = 0; drawIndex < textureData->GetDrawCount(); ++drawIndex)
+        {
+            FTextureViewRegion region;
+            if (!textureData->GetDrawRegion(drawIndex, region)) continue;
+            textureData->BindTextures(0, drawIndex);
+            shader->SetVec4("uDrawRegion", region.MinU, region.MinV, region.MaxU, region.MaxV);
+            setPlaneCoordinates("uTextureScale0", "uTextureOffset0", 0, drawIndex);
+            if (data->TextureCount >= 2)
+            {
+                const uint32_t uPlane = data->TextureCount >= 3 && data->SwapUV != 0 ? 2 : 1;
+                setPlaneCoordinates("uTextureScale1", "uTextureOffset1", uPlane, drawIndex);
+            }
+            if (data->TextureCount >= 3)
+            {
+                const uint32_t vPlane = data->SwapUV != 0 ? 1 : 2;
+                setPlaneCoordinates("uTextureScale2", "uTextureOffset2", vPlane, drawIndex);
+            }
+            float originX = 0.0f, originY = 0.0f;
+            textureData->GetTextureTexelOrigin(0, originX, originY, drawIndex);
+            shader->SetVec2("uTextureOrigin0", originX, originY);
+            glDrawArrays(GL_TRIANGLES, 0, kQuadVertexCount);
+        }
+        textureData->FinishDraw();
         glDeleteVertexArrays(1, &quadVAO);
 
         // 恢复 OpenGL 状态
@@ -2152,6 +2215,21 @@ void FImageViewer::IssueDrawCallback(
 
     // 添加一个重置渲染状态的回调（确保后续 ImGui 渲染正常）
     drawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+    if (textureData->HasSparseFailure())
+    {
+        const char* message = FLocalization::Text(EUiText::SparsePreviewFallback);
+        const float margin = FUiScale::Apply(kOverlayMargin);
+        const float padding = FUiScale::Apply(kOverlayPadding);
+        const float wrapWidth = std::max(1.0f, ClipMax.x - ClipMin.x - 2 * (margin + padding));
+        const ImVec2 textSize = ImGui::CalcTextSize(message, nullptr, false, wrapWidth);
+        const ImVec2 position(ClipMin.x + margin + padding, ClipMax.y - margin - padding - textSize.y);
+        drawList->PushClipRect(ClipMin, ClipMax, true);
+        drawList->AddRectFilled(ImVec2(position.x - padding, position.y - padding),
+            ImVec2(position.x + textSize.x + padding, position.y + textSize.y + padding),
+            kOverlayBackground, FUiScale::Apply(kOverlayRounding));
+        drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), position, kOverlayText, message, nullptr, wrapWidth);
+        drawList->PopClipRect();
+    }
 }
 
 void FImageViewer::RenderPixelProbe(int32_t ImageX, int32_t ImageY)

@@ -50,8 +50,12 @@ UI 侧 `FPropertyPanel::SetParamsEditable(false)` 把格式/分辨率/stride/位
 不要在共享 loader 实例上保存可变的 last-error 状态：异步切图与导出可以同时调用它。
 `FAsyncImageLoader` 把错误类别转换为可读文字；RAW 截断仍保留实际/所需字节数提示。
 
-WIC 在创建格式转换器前检查文件头尺寸，统一使用 `FImageLimits` 的最大单边 65535、
-128 Mi 像素、512 MiB 单帧限制，stride 与缓冲大小经安全乘法后才能转成 UINT/int32_t。
+WIC 在创建格式转换器前检查文件头尺寸，统一使用 `FImageLimits` 的最大单边 65535。
+64 位构建允许 256 Mi 像素、1 GiB 单帧（可容纳 16384x16384 RGBA8），Win32 保留
+128 Mi 像素、512 MiB 单帧限制；stride 与缓冲大小经安全乘法后才能转成 UINT/int32_t。
+这些是 CPU 单帧保护边界，不代表总进程内存预算或 GPU 单纹理上限。异步加载失败时，
+资源超限提示显示当前构建的实际边长、像素数和 MiB 上限；GPU 错误另外区分尺寸超限、
+图形内存不足和其它 OpenGL 错误，详见 [纹理与渲染](rendering.md#gpu-尺寸预检查与失败详情)。
 RAW、WIC、DNG 分别处理尺寸超限、截断/解码失败及分配异常；LibRaw 实例使用堆分配，
 避免 0.22 的大对象消耗后台线程栈。新增加载器不得绕开这些约束。
 

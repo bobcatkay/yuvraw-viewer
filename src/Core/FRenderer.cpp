@@ -11,6 +11,7 @@
 // 先由 Windows SDK 定义 APIENTRY，避免 GLAD 与 glfw3native.h 重复定义。
 #include <windows.h>
 #include <glad/glad.h>
+#include "gl/FSparseTexture.h"
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
@@ -61,6 +62,13 @@ bool FRenderer::Initialize(void* Window)
         NativeWindow = nullptr;
         return false;
     }
+
+    GLint maximumTextureDimension = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maximumTextureDimension);
+    const auto* rendererName = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+    LOGI("TextureUpload", "GPU: %s; GL_MAX_TEXTURE_SIZE=%d",
+        rendererName ? rendererName : "unknown", maximumTextureDimension);
+    LOGI("SparseTexture", "ARB_sparse_texture available: %d", FSparseTexture::IsSupported() ? 1 : 0);
 
     // 初始化ImGui
     IMGUI_CHECKVERSION();

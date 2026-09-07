@@ -12,10 +12,36 @@
  *  - YUV 类格式共用同一份着色器，色彩标准/数值范围/位深/UV 顺序全部通过 uniform 传入，
  *    不为每种组合生成一份源码（否则 3 标准 x 2 范围 x N 格式会爆炸）
  *  - 着色器按 EImageFormat 缓存（FShaderManager），同一格式只编译一次
- *  - 片段着色器 = 版本声明 + 色彩管线前导块 + 各格式的取样代码，见 GetColorPipelineGLSL
+ *  - 片段着色器 = 版本声明 + 纹理坐标辅助块 + 色彩管线前导块 + 各格式取样代码
  */
 namespace FShaders
 {
+    inline const char* GetTextureSamplingGLSL()
+    {
+        return R"(
+            uniform vec2 uTextureScale0 = vec2(1.0);
+            uniform vec2 uTextureScale1 = vec2(1.0);
+            uniform vec2 uTextureScale2 = vec2(1.0);
+            uniform vec2 uTextureOffset0 = vec2(0.0);
+            uniform vec2 uTextureOffset1 = vec2(0.0);
+            uniform vec2 uTextureOffset2 = vec2(0.0);
+            uniform vec2 uTextureOrigin0 = vec2(0.0);
+
+            vec4 SampleImagePlane(sampler2D plane, vec2 uv, vec2 scale, vec2 offset)
+            {
+                // Tile halos preserve filtering across boundaries. Sparse storage
+                // may include padding, so clamp to the last real image texel there.
+                vec2 halfTexel = vec2(0.5) / vec2(textureSize(plane, 0));
+                return texture(plane, clamp((uv - offset) * scale, halfTexel, min(scale, vec2(1.0)) - halfTexel));
+            }
+
+            vec4 SampleImagePlane(sampler2D plane, vec2 uv, vec2 scale)
+            {
+                return SampleImagePlane(plane, uv, scale, vec2(0.0));
+            }
+        )";
+    }
+
     /**
      * 通用顶点着色器（所有格式共享）
      */
@@ -28,13 +54,16 @@ namespace FShaders
 
             uniform mat4 uProjection;
             uniform mat4 uTransform;
+            uniform vec4 uDrawRegion = vec4(0.0, 0.0, 1.0, 1.0);
 
             out vec2 TexCoord;
 
             void main()
             {
-                gl_Position = uProjection * uTransform * vec4(aPos, 0.0, 1.0);
-                TexCoord = aTexCoord;
+                // The transform remains the full image transform, including rotation/flip.
+                vec2 position = mix(uDrawRegion.xy, uDrawRegion.zw, aPos * 0.5 + 0.5) * 2.0 - 1.0;
+                gl_Position = uProjection * uTransform * vec4(position, 0.0, 1.0);
+                TexCoord = mix(uDrawRegion.xy, uDrawRegion.zw, aTexCoord);
             }
         )";
     }
@@ -256,8 +285,8 @@ namespace FShaders
 
             void main()
             {
-                float y  = texture(uTextureY,  TexCoord).r  * uSampleScale;
-                vec2  uvSample = texture(uTextureUV, TexCoord).rg * uSampleScale;
+                float y  = SampleImagePlane(uTextureY, TexCoord, uTextureScale0, uTextureOffset0).r * uSampleScale;
+                vec2  uvSample = SampleImagePlane(uTextureUV, TexCoord, uTextureScale1, uTextureOffset1).rg * uSampleScale;
 
                 float u = (uSwapUV != 0) ? uvSample.y : uvSample.x;
                 float v = (uSwapUV != 0) ? uvSample.x : uvSample.y;
@@ -309,9 +338,9 @@ namespace FShaders
 
             void main()
             {
-                float y = texture(uTextureY, TexCoord).r * uSampleScale;
-                float u = texture(uTextureU, TexCoord).r * uSampleScale;
-                float v = texture(uTextureV, TexCoord).r * uSampleScale;
+                float y = SampleImagePlane(uTextureY, TexCoord, uTextureScale0, uTextureOffset0).r * uSampleScale;
+                float u = SampleImagePlane(uTextureU, TexCoord, uTextureScale1, uTextureOffset1).r * uSampleScale;
+                float v = SampleImagePlane(uTextureV, TexCoord, uTextureScale2, uTextureOffset2).r * uSampleScale;
 
                 if (uChannelMode == 1)
                 {
@@ -363,7 +392,7 @@ namespace FShaders
                 pixel = clamp(pixel, ivec2(0), ivec2(uImageSize) - ivec2(1));
 
                 // 两个相邻像素共用一个纹素
-                vec4 texel = texelFetch(uTexture, ivec2(pixel.x >> 1, pixel.y), 0);
+                vec4 texel = texelFetch(uTexture, ivec2(pixel.x >> 1, pixel.y) - ivec2(uTextureOrigin0), 0);
 
                 bool bOddPixel = (pixel.x & 1) == 1;
 
@@ -431,6 +460,7 @@ namespace FShaders
             uniform vec2  uImageSize;
             uniform float uSampleScale;   // 16bit 容器里装 10/12bit 时把值拉回满量程
             uniform int   uBayerPattern;
+            uniform vec2  uTextureOrigin0 = vec2(0.0);
             uniform int   uChannelMode;   // 0=彩色 1/2/3=R/G/B
 
             // 带边界钳制的整数取样
@@ -438,7 +468,7 @@ namespace FShaders
             {
                 ivec2 maxCoord = ivec2(uImageSize) - ivec2(1);
                 coord = clamp(coord, ivec2(0), maxCoord);
-                return texelFetch(uTexture, coord, 0).r * uSampleScale;
+                return texelFetch(uTexture, coord - ivec2(uTextureOrigin0), 0).r * uSampleScale;
             }
 
             void main()
@@ -519,7 +549,7 @@ namespace FShaders
 
             void main()
             {
-                vec4 c = texture(uTexture, TexCoord);
+                vec4 c = SampleImagePlane(uTexture, TexCoord, uTextureScale0, uTextureOffset0);
 
                 if      (uChannelMode == 1) { FragColor = vec4(vec3(c.r), 1.0); }
                 else if (uChannelMode == 2) { FragColor = vec4(vec3(c.g), 1.0); }
@@ -548,7 +578,7 @@ namespace FShaders
 
             void main()
             {
-                float g = clamp(texture(uTexture, TexCoord).r * uSampleScale, 0.0, 1.0);
+                float g = clamp(SampleImagePlane(uTexture, TexCoord, uTextureScale0, uTextureOffset0).r * uSampleScale, 0.0, 1.0);
                 FragColor = vec4(ApplyColorPipeline(vec3(g)), 1.0);
             }
         )";
@@ -557,7 +587,7 @@ namespace FShaders
     /**
      * 根据图像格式获取片段着色器代码
      *
-     * 返回值是拼好的完整源码（版本声明 + 色彩管线前导块 + 格式相关的取样代码）。
+     * 返回完整源码（版本声明 + 纹理坐标辅助块 + 色彩管线前导块 + 格式取样代码）。
      * Bayer 自带完整源码、不拼前导块 —— 理由见 GetBayerShader 的注释。
      *
      * @param Format 图像格式
@@ -616,7 +646,7 @@ namespace FShaders
             break;
         }
 
-        return std::string("#version 330 core\n") + GetColorPipelineGLSL() + body;
+        return std::string("#version 330 core\n") + GetTextureSamplingGLSL() + GetColorPipelineGLSL() + body;
     }
 
     /**

@@ -83,6 +83,9 @@
     <ClCompile Include="src\GL\FTexture.cpp">
       <Filter>GL</Filter>
     </ClCompile>
+    <ClCompile Include="src\GL\FSparseTexture.cpp">
+      <Filter>GL</Filter>
+    </ClCompile>
     <ClCompile Include="src\GL\FShader.cpp">
       <Filter>GL</Filter>
     </ClCompile>
@@ -232,6 +235,9 @@
     <ClInclude Include="src\GL\FTexture.h">
       <Filter>GL</Filter>
     </ClInclude>
+    <ClInclude Include="src\GL\FSparseTexture.h">
+      <Filter>GL</Filter>
+    </ClInclude>
     <ClInclude Include="src\GL\FShader.h">
       <Filter>GL</Filter>
     </ClInclude>
@@ -270,6 +276,9 @@
     </ClInclude>
     <ClInclude Include="src\Core\FUserSettings.h">
       <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\GL\FTextureLoadOptions.h">
+      <Filter>GL</Filter>
     </ClInclude>
     <ClInclude Include="src\Core\FLocalization.h">
       <Filter>头文件</Filter>

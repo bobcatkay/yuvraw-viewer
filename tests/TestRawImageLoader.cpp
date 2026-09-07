@@ -645,7 +645,8 @@ namespace
     void TestResourceLimits()
     {
         constexpr int32_t kBoundaryWidth = 16384;
-        constexpr int32_t kAbovePixelLimitHeight = 8194;
+        constexpr int32_t kAbovePixelLimitHeight = static_cast<int32_t>(
+            FImageLimits::kMaximumPixelCount / static_cast<size_t>(kBoundaryWidth)) + 2;
         constexpr int32_t kSmallWidth = 4;
         constexpr int32_t kSmallHeight = 2;
         const std::vector<uint8_t> dummyBytes(128u, 0u);
