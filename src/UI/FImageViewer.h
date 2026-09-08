@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Image/FImageMetadata.h"
+#include <vector>
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -224,6 +227,30 @@ public:
     bool ContainsScreenPoint(float X, float Y) const;
 
 private:
+    struct FExifOverlayState
+    {
+        std::shared_ptr<const FImageMetadata> Metadata;
+        std::string FilePath;
+        std::vector<std::string> Lines;
+        std::string CopyText;
+        float WrapWidth = 0.0f;
+        float FontSize = 0.0f;
+        const void* Font = nullptr;
+        int32_t Language = -1;
+        float ScrollY = 0.0f;
+        bool bDraggingScrollbar = false;
+    };
+
+    struct FPendingExifVisual
+    {
+        FExifOverlayState* State = nullptr;
+        float MinX = 0.0f;
+        float MinY = 0.0f;
+        float MaxX = 0.0f;
+        float MaxY = 0.0f;
+        uint32_t ViewportId = 0;
+    };
+
     struct FDocumentViewState
     {
         FImageViewSettings Settings;
@@ -279,6 +306,10 @@ private:
 
     void RenderImage();
     void RenderToolbar();
+
+    /// 布局与命中在画布之前完成，实际绘制与镜像/旋转共用前景层。
+    bool PrepareExifOverlay(FImageDocument* Doc, const ImVec2& PaneMin,
+        const ImVec2& PaneMax, const char* Label, const char* IdentityLabel);
 
     /**
      * 切换平铺模式的缩放/平移同步。开启时以当前选中图片为基准对齐另一侧，
@@ -392,6 +423,11 @@ private:
 
     /// 平铺模式下是否同步两侧的缩放与平移；镜像和旋转始终独立。
     bool bPanZoomSynchronized;
+
+    /// 查看器级开关，每次启动默认关闭；切图及平铺使用各自元数据，不写入图片配置。
+    bool bShowExif;
+    std::unordered_map<const FImageDocument*, FExifOverlayState> ExifOverlayStates;
+    std::vector<FPendingExifVisual> PendingExifVisuals;
 
     /// 像素探针：鼠标所在的图像像素坐标，-1 表示不在图像内
     int32_t ProbeX;

@@ -1,11 +1,13 @@
 #pragma once
 
 #include "FImageFormat.h"
+#include "FImageMetadata.h"
 
 #include <cstdint>
 #include <vector>
 #include <memory>
 #include <string>
+#include <utility>
 
 /**
  * 图像数据类型
@@ -111,6 +113,9 @@ public:
      */
     size_t GetPixelDataSize() const { return PixelData.size(); }
 
+    const std::shared_ptr<const FImageMetadata>& GetMetadata() const { return Metadata; }
+    void SetMetadata(std::shared_ptr<const FImageMetadata> InMetadata) { Metadata = std::move(InMetadata); }
+
     /**
      * 获取指定平面的数据起始地址，索引越界返回 nullptr
      */
@@ -144,4 +149,5 @@ private:
     int32_t SampleShift;      ///< 采样值在容器内的左移位数，-1 表示沿用格式默认
     EImageFormat Format;
     std::vector<uint8_t> PixelData;
+    std::shared_ptr<const FImageMetadata> Metadata;
 };

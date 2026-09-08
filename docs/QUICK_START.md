@@ -31,11 +31,14 @@ For example, open your NV21 file with the following command; replace the example
 | Fit / 1:1 | `Ctrl + 0` / `Ctrl + 1` |
 | Reset zoom and offset | Left double-click |
 | Copy probe information | Right-click a valid canvas pixel |
+| Show / hide EXIF | Information-card icon in the viewer's top toolbar (off by default) |
 | Add a comparison image | File-browser context menu |
 | Switch comparison image | Left-click the canvas in single-image switching mode |
 | Export current image | `Ctrl + E` |
 
 Comparison offers single-image switching, tiling, and differences. Use `Ctrl` / `Shift` selection in the file browser for batch export. Supported outputs are PNG, JPEG, BMP, and lossless WebP, at original size, a percentage, or a specified width with preserved aspect ratio.
+
+The EXIF overlay appears at the upper left of each visible image, below any image label and filename. It shows common shooting parameters: date taken, camera and lens make/model, shutter speed, aperture, ISO, focal length, 35mm equivalent focal length, exposure compensation, and orientation. Missing fields are omitted. Values use readable formats such as `1/50 s` and `f/2.1`; raw metadata paths and binary data are hidden. Scroll or drag to browse when necessary, and right-click to copy the displayed parameters. HEIC metadata availability depends on the installed system codec.
 
 ## Format limitations
 

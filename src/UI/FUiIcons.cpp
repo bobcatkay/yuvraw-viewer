@@ -31,6 +31,13 @@ namespace
     constexpr ImU32 kGlyphColor = IM_COL32(255, 255, 255, 255);
     constexpr float kCloseGlyphInsetRatio = 0.25f;
     constexpr float kCloseGlyphStrokeRatio = 0.0625f;
+    constexpr float kExifGlyphInsetRatio = 0.12f;
+    constexpr float kExifGlyphRoundingRatio = 0.12f;
+    constexpr float kExifGlyphStrokeRatio = 0.0625f;
+    constexpr float kExifGlyphCenterRatio = 0.5f;
+    constexpr float kExifGlyphDotYRatio = 0.32f;
+    constexpr float kExifGlyphStemTopRatio = 0.47f;
+    constexpr float kExifGlyphStemBottomRatio = 0.73f;
 
     // 文件选中态读取选择项主题色，但保留原透明度，避免在浅色面板里淡到难以辨认。
     constexpr float kFileSelectedAlpha = 0.82f;
@@ -975,6 +982,19 @@ void FUiIcons::DrawViewerGlyph(ImDrawList* DrawList, EViewerGlyph Glyph, const I
 
     switch (Glyph)
     {
+    case EViewerGlyph::Exif:
+    {
+        const float inset = Size * kExifGlyphInsetRatio;
+        const float stroke = GetNormalizedStrokeWidth(Size, kExifGlyphStrokeRatio);
+        DrawList->AddRect(ImVec2(Pos.x + inset, Pos.y + inset),
+            ImVec2(Pos.x + Size - inset, Pos.y + Size - inset), kGlyphColor,
+            Size * kExifGlyphRoundingRatio, ImDrawFlags_None, stroke);
+        const float centerX = Pos.x + Size * kExifGlyphCenterRatio;
+        DrawList->AddCircleFilled(ImVec2(centerX, Pos.y + Size * kExifGlyphDotYRatio), stroke, kGlyphColor);
+        DrawList->AddLine(ImVec2(centerX, Pos.y + Size * kExifGlyphStemTopRatio),
+            ImVec2(centerX, Pos.y + Size * kExifGlyphStemBottomRatio), kGlyphColor, stroke);
+        break;
+    }
     case EViewerGlyph::MirrorHorizontal:
         DrawMirrorHorizontalGlyph(DrawList, Pos, Size);
         break;
@@ -1030,6 +1050,11 @@ void FUiIcons::DrawViewerGlyph(ImDrawList* DrawList, EViewerGlyph Glyph, const I
         break;
     }
     }
+}
+
+ImU32 FUiIcons::GetViewerGlyphColor()
+{
+    return kGlyphColor;
 }
 
 bool FUiIcons::ResetButton(const char* Id, const char* Tooltip, float Size)

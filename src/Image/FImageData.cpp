@@ -167,4 +167,5 @@ void FImageData::Clear()
     SampleShift = -1;
     Format = EImageFormat::Unknown;
     PixelData.clear();
+    Metadata.reset();
 }

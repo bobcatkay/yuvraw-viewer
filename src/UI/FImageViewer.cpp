@@ -30,6 +30,11 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <iomanip>
+#include <iterator>
+#include <limits>
+#include <locale>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -56,6 +61,15 @@ namespace
     constexpr float kOverlayMargin = 8.0f;
     constexpr float kOverlayPadding = 4.0f;
     constexpr float kOverlayRounding = 6.0f;
+    constexpr float kExifOverlayWidth = 480.0f;
+    constexpr float kExifWheelScrollLines = 3.0f;
+    constexpr float kExifMinimumScrollThumbHeight = 20.0f;
+    constexpr int32_t kExifNumberPrecision = 2;
+    constexpr double kExifShutterRoundingTolerance = 0.01;
+    constexpr size_t kExifDateYearSeparator = 4;
+    constexpr size_t kExifDateMonthSeparator = 7;
+    constexpr size_t kExifDateLength = 19;
+    constexpr size_t kExifValueBufferSize = 128;
     constexpr int32_t kOverlayAlpha = 89; ///< 原 70% 不透明度减半为 35%
     constexpr int32_t kOverlayButtonHoveredAlpha = 41;
     constexpr int32_t kOverlayButtonActiveAlpha = 64;
@@ -153,6 +167,235 @@ namespace
                 : GroupMin.x + padding
                     + static_cast<float>(ButtonIndex) * (ImGui::GetFrameHeight() + spacing),
             GroupMin.y + padding);
+    }
+
+    FPaneRect MakePaneLabelRect(const ImVec2& PaneMin, const ImVec2& PaneMax,
+        const char* Label, const char* IdentityLabel)
+    {
+        const FPaneRect empty{ PaneMin, PaneMin };
+        if (!Label || !*Label) { return empty; }
+        const float padding = FUiScale::Apply(kOverlayPadding);
+        const float margin = FUiScale::Apply(kOverlayMargin);
+        const float height = ImGui::GetFrameHeight() + padding * 2.0f;
+        const float identityWidth = IdentityLabel && *IdentityLabel
+            ? ImGui::CalcTextSize(IdentityLabel).x + padding * 2.0f : 0.0f;
+        const FPaneOverlayLayout controls = MakePaneOverlayLayout(PaneMin, PaneMax);
+        FPaneRect label{ ImVec2(PaneMin.x + margin, PaneMin.y + margin), ImVec2() };
+        label.Max = ImVec2(label.Min.x + identityWidth + ImGui::CalcTextSize(Label).x + padding * 2.0f,
+            label.Min.y + height);
+        if (controls.Bounds.Width() > 0.0f)
+        {
+            const float topRowMaxX = controls.Bounds.Min.x - padding;
+            const float minimumWidth = identityWidth + padding * 2.0f + ImGui::GetFontSize();
+            if (label.Max.x > topRowMaxX && topRowMaxX < label.Min.x + minimumWidth)
+            {
+                // 窄画布先把文件名放到按钮下方；EXIF 使用同一结果，不能只按一行高避让。
+                label.Min.y = controls.Bounds.Max.y + padding;
+                label.Max.y = label.Min.y + height;
+            }
+            else { label.Max.x = std::min(label.Max.x, topRowMaxX); }
+        }
+        label.Max.x = std::min(label.Max.x, PaneMax.x - margin);
+        return label.Max.x > label.Min.x + identityWidth + padding * 2.0f &&
+            label.Max.y <= PaneMax.y - margin ? label : empty;
+    }
+
+    std::string CleanExifText(std::string Text)
+    {
+        for (char& character : Text)
+        {
+            if (static_cast<unsigned char>(character) < ' ') { character = ' '; }
+        }
+        const size_t first = Text.find_first_not_of(' ');
+        return first == std::string::npos ? std::string() :
+            Text.substr(first, Text.find_last_not_of(' ') - first + 1);
+    }
+
+    std::string FindExifCaptureValue(const FImageMetadata& Metadata,
+        EImageMetadataBlock Block, const char* Tag)
+    {
+        std::string result;
+        size_t bestDepth = (std::numeric_limits<size_t>::max)();
+        for (const FImageMetadataEntry& entry : Metadata.Entries)
+        {
+            const size_t separator = entry.Path.find_last_of('/');
+            if (entry.Block != Block || separator == std::string::npos || entry.Path.substr(separator) != Tag)
+            {
+                continue;
+            }
+            const std::string value = CleanExifText(entry.Value);
+            const size_t depth = static_cast<size_t>(std::count(entry.Path.begin(), entry.Path.end(), '/'));
+            // 同一字段可能出现在缩略图中；优先主层级，避免缩略图参数覆盖原图。
+            if (!value.empty() && depth < bestDepth)
+            {
+                result = value;
+                bestDepth = depth;
+            }
+        }
+        return result;
+    }
+
+    bool ParseExifNumber(const std::string& Text, double& OutValue)
+    {
+        std::istringstream input(Text);
+        input.imbue(std::locale::classic());
+        double numerator = 0.0;
+        double denominator = 1.0;
+        if (!(input >> numerator)) { return false; }
+        input >> std::ws;
+        if (!input.eof() && input.peek() == '/')
+        {
+            input.get();
+            if (!(input >> denominator) || denominator == 0.0) { return false; }
+            input >> std::ws;
+        }
+        OutValue = numerator / denominator;
+        return input.eof() && std::isfinite(OutValue);
+    }
+
+    std::string FormatExifNumber(double Value, int32_t Precision = kExifNumberPrecision)
+    {
+        std::ostringstream output;
+        output.imbue(std::locale::classic());
+        output << std::fixed << std::setprecision(Precision) << Value;
+        std::string text = output.str();
+        if (text.find('.') != std::string::npos)
+        {
+            text.erase(text.find_last_not_of('0') + 1);
+            if (!text.empty() && text.back() == '.') { text.pop_back(); }
+        }
+        return text == "-0" ? "0" : text;
+    }
+
+    enum class EExifDisplayFormat { Text, Shutter, Aperture, Iso, FocalLength, ExposureBias, Orientation };
+
+    std::string FormatExifCaptureValue(const std::string& Text, EExifDisplayFormat Format)
+    {
+        if (Format == EExifDisplayFormat::Text) { return Text; }
+        double value = 0.0;
+        if (!ParseExifNumber(Text, value)) { return {}; }
+        if (Format == EExifDisplayFormat::Orientation)
+        {
+            static constexpr EUiText kOrientationLabels[] = {
+                EUiText::ExifOrientationUnspecified,
+                EUiText::ExifOrientationNormal,
+                EUiText::ExifOrientationMirrorHorizontal,
+                EUiText::ExifOrientationRotate180,
+                EUiText::ExifOrientationMirrorVertical,
+                EUiText::ExifOrientationTranspose,
+                EUiText::ExifOrientationRotate90,
+                EUiText::ExifOrientationTransverse,
+                EUiText::ExifOrientationRotate270,
+            };
+            if (value < 0.0 || value >= std::size(kOrientationLabels) || value != std::floor(value)) { return {}; }
+            return FLocalization::Text(kOrientationLabels[static_cast<size_t>(value)]);
+        }
+        if (Format != EExifDisplayFormat::ExposureBias && value <= 0.0) { return {}; }
+        if (Format == EExifDisplayFormat::Iso)
+        {
+            return value == std::floor(value) ? FormatExifNumber(value, 0) : std::string();
+        }
+        EUiText formatText = EUiText::ExifFocalLengthValue;
+        std::string number = FormatExifNumber(value);
+        switch (Format)
+        {
+        case EExifDisplayFormat::Shutter:
+        {
+            formatText = EUiText::ExifShutterSecondsValue;
+            const double reciprocal = 1.0 / value;
+            const double rounded = std::round(reciprocal);
+            // 手机曝光时长常接近标准快门（如 0.019994001 秒）；显示 1/50 s 更易读。
+            if (value < 1.0 && std::abs(reciprocal - rounded) / reciprocal <= kExifShutterRoundingTolerance)
+            {
+                formatText = EUiText::ExifShutterFractionValue;
+                number = FormatExifNumber(rounded, 0);
+            }
+            break;
+        }
+        case EExifDisplayFormat::Aperture: formatText = EUiText::ExifApertureValueFormat; break;
+        case EExifDisplayFormat::ExposureBias:
+            formatText = EUiText::ExifExposureBiasValue;
+            if (value > 0.0 && number != "0") { number.insert(number.begin(), '+'); }
+            break;
+        default: break;
+        }
+        char formatted[kExifValueBufferSize];
+        std::snprintf(formatted, sizeof(formatted), FLocalization::Text(formatText), number.c_str());
+        return formatted;
+    }
+
+    struct FExifCaptureRow { EUiText Label; std::string Value; };
+
+    std::vector<FExifCaptureRow> BuildExifCaptureRows(const FImageMetadata& Metadata)
+    {
+        std::vector<FExifCaptureRow> rows;
+        std::string date = FindExifCaptureValue(Metadata, EImageMetadataBlock::Exif, "/{ushort=36867}");
+        if (!date.empty())
+        {
+            if (date.size() >= kExifDateLength && date[kExifDateYearSeparator] == ':' && date[kExifDateMonthSeparator] == ':')
+            {
+                date[kExifDateYearSeparator] = date[kExifDateMonthSeparator] = '-';
+            }
+            const std::string offset = FindExifCaptureValue(Metadata, EImageMetadataBlock::Exif, "/{ushort=36881}");
+            if (!offset.empty()) { date += " " + offset; }
+            rows.push_back({ EUiText::ExifDateOriginal, std::move(date) });
+        }
+        struct FCaptureField
+        {
+            EImageMetadataBlock Block;
+            const char* Tag;
+            EUiText Label;
+            EExifDisplayFormat Format;
+        };
+        // 只显示常用拍摄参数；按块类型和标签编号匹配，兼容 /ifd/exif 与 /{ushort=34665}。
+        static constexpr FCaptureField kFields[] = {
+            { EImageMetadataBlock::Ifd, "/{ushort=271}", EUiText::ExifMake, EExifDisplayFormat::Text },
+            { EImageMetadataBlock::Ifd, "/{ushort=272}", EUiText::ExifModel, EExifDisplayFormat::Text },
+            { EImageMetadataBlock::Exif, "/{ushort=42035}", EUiText::ExifLensMake, EExifDisplayFormat::Text },
+            { EImageMetadataBlock::Exif, "/{ushort=42036}", EUiText::ExifLensModel, EExifDisplayFormat::Text },
+            { EImageMetadataBlock::Exif, "/{ushort=33434}", EUiText::ExifExposureTime, EExifDisplayFormat::Shutter },
+            { EImageMetadataBlock::Exif, "/{ushort=33437}", EUiText::ExifFNumber, EExifDisplayFormat::Aperture },
+            { EImageMetadataBlock::Exif, "/{ushort=34855}", EUiText::ExifIso, EExifDisplayFormat::Iso },
+            { EImageMetadataBlock::Exif, "/{ushort=37386}", EUiText::ExifFocalLength, EExifDisplayFormat::FocalLength },
+            { EImageMetadataBlock::Exif, "/{ushort=41989}", EUiText::ExifFocalLength35mm, EExifDisplayFormat::FocalLength },
+            { EImageMetadataBlock::Exif, "/{ushort=37380}", EUiText::ExifExposureBias, EExifDisplayFormat::ExposureBias },
+            { EImageMetadataBlock::Ifd, "/{ushort=274}", EUiText::ExifOrientation, EExifDisplayFormat::Orientation },
+        };
+        for (const FCaptureField& field : kFields)
+        {
+            std::string value = FormatExifCaptureValue(FindExifCaptureValue(Metadata, field.Block, field.Tag), field.Format);
+            if (!value.empty()) { rows.push_back({ field.Label, std::move(value) }); }
+        }
+        return rows;
+    }
+
+    void AppendWrappedExifLines(std::vector<std::string>& Lines, std::string Text, float Width)
+    {
+        Text.erase(std::remove(Text.begin(), Text.end(), '\r'), Text.end());
+        std::replace(Text.begin(), Text.end(), '\t', ' ');
+        ImFont* font = ImGui::GetFont();
+        const float scale = ImGui::GetFontSize() / font->FontSize;
+        const char* cursor = Text.data();
+        const char* end = cursor + Text.size();
+        while (cursor < end)
+        {
+            const char* lineEnd = std::find(cursor, end, '\n');
+            if (cursor == lineEnd) { Lines.emplace_back(); }
+            while (cursor < lineEnd)
+            {
+                const char* wrapEnd = font->CalcWordWrapPositionA(scale, cursor, lineEnd, Width);
+                if (wrapEnd <= cursor)
+                {
+                    // 极窄 pane 也必须按 UTF-8 字符前进，不能拆开一个汉字或陷入死循环。
+                    unsigned int codepoint = 0;
+                    wrapEnd = cursor + std::max(1, ImTextCharFromUtf8(&codepoint, cursor, lineEnd));
+                }
+                Lines.emplace_back(cursor, wrapEnd);
+                cursor = wrapEnd;
+                while (cursor < lineEnd && *cursor == ' ') { ++cursor; }
+            }
+            cursor = lineEnd == end ? end : lineEnd + 1;
+        }
     }
 
     bool HasValidImage(const FImageDocument* Doc)
@@ -323,6 +566,7 @@ FImageViewer::FImageViewer()
     , bSingleImageSwitchShowingCompare(false)
     , TileLayout(ETileLayout::Horizontal)
     , bPanZoomSynchronized(true)
+    , bShowExif(false)
     , ProbeX(-1)
     , ProbeY(-1)
     , DropRectMin{ 0.0f, 0.0f }
@@ -413,6 +657,7 @@ void FImageViewer::SetTileLayout(ETileLayout Layout)
 
 void FImageViewer::Render()
 {
+    PendingExifVisuals.clear();
     PendingPaneOverlayVisualCount = 0;
     PendingLoadingVisualCount = 0;
     PendingSingleImageHintVisual = FPendingSingleImageHintVisual{};
@@ -448,6 +693,49 @@ void FImageViewer::Render()
 
 void FImageViewer::RenderOverlayVisuals()
 {
+    for (const FPendingExifVisual& visual : PendingExifVisuals)
+    {
+        const FExifOverlayState& state = *visual.State;
+        ImGuiViewport* viewport = ImGui::FindViewportByID(static_cast<ImGuiID>(visual.ViewportId));
+        if (!viewport) { viewport = ImGui::GetMainViewport(); }
+        ImDrawList* overlay = ImGui::GetForegroundDrawList(viewport);
+        const ImVec2 min(visual.MinX, visual.MinY);
+        const ImVec2 max(visual.MaxX, visual.MaxY);
+        const float padding = FUiScale::Apply(kOverlayPadding);
+        const float lineHeight = ImGui::GetTextLineHeightWithSpacing();
+        const float contentHeight = static_cast<float>(state.Lines.size()) * lineHeight;
+        const float viewHeight = max.y - min.y - padding * 2.0f;
+        const float scrollbarWidth = ImGui::GetStyle().ScrollbarSize;
+        const ImU32 textColor = FUiIcons::GetViewerGlyphColor();
+        overlay->AddRectFilled(min, max, kOverlayBackground, FUiScale::Apply(kOverlayRounding));
+        const ImVec2 textMin(min.x + padding, min.y + padding);
+        const ImVec2 textMax(max.x - padding - scrollbarWidth, max.y - padding);
+        overlay->PushClipRect(textMin, textMax, true);
+        const size_t firstLine = static_cast<size_t>(std::max(0.0f, std::floor(state.ScrollY / lineHeight)));
+        const size_t visibleLines = static_cast<size_t>(std::ceil(viewHeight / lineHeight)) + 1;
+        const size_t lastLine = std::min(state.Lines.size(), firstLine + visibleLines);
+        // 只提交可见行；MakerNote 等较大字段不应在逐帧路径反复换行或生成全部字形。
+        for (size_t line = firstLine; line < lastLine; ++line)
+        {
+            overlay->AddText(ImVec2(textMin.x,
+                textMin.y + static_cast<float>(line) * lineHeight - state.ScrollY),
+                textColor, state.Lines[line].c_str());
+        }
+        overlay->PopClipRect();
+        if (contentHeight > viewHeight)
+        {
+            const float thumbHeight = std::min(viewHeight,
+                std::max(FUiScale::Apply(kExifMinimumScrollThumbHeight), viewHeight * viewHeight / contentHeight));
+            const float thumbTop = textMin.y + (viewHeight - thumbHeight) * state.ScrollY / (contentHeight - viewHeight);
+            const ImVec2 trackMin(max.x - padding - scrollbarWidth, textMin.y);
+            const ImVec2 trackMax(max.x - padding, textMax.y);
+            overlay->AddRectFilled(trackMin, trackMax, kOverlayButtonHovered, FUiScale::Apply(kOverlayRounding));
+            overlay->AddRectFilled(ImVec2(trackMin.x, thumbTop),
+                ImVec2(trackMax.x, thumbTop + thumbHeight), textColor, FUiScale::Apply(kOverlayRounding));
+        }
+    }
+    PendingExifVisuals.clear();
+
     constexpr FUiIcons::EViewerGlyph kButtonGlyphs[kPaneOverlayButtonCount] = {
         FUiIcons::EViewerGlyph::MirrorHorizontal,
         FUiIcons::EViewerGlyph::MirrorVertical,
@@ -1096,8 +1384,133 @@ void FImageViewer::QueueSingleImageSwitchHint(
     PendingSingleImageHintVisual.bValid = true;
 }
 
+bool FImageViewer::PrepareExifOverlay(FImageDocument* Doc, const ImVec2& PaneMin,
+    const ImVec2& PaneMax, const char* Label, const char* IdentityLabel)
+{
+    if (!bShowExif || !HasValidImage(Doc)) { return false; }
+    const float padding = FUiScale::Apply(kOverlayPadding);
+    const float margin = FUiScale::Apply(kOverlayMargin);
+    const float lineHeight = ImGui::GetTextLineHeightWithSpacing();
+    const float scrollbarWidth = ImGui::GetStyle().ScrollbarSize;
+    const float width = std::min(FUiScale::Apply(kExifOverlayWidth), PaneMax.x - PaneMin.x - margin * 2.0f);
+    const float wrapWidth = width - padding * 2.0f - scrollbarWidth;
+    ImVec2 min(PaneMin.x + margin, PaneMin.y + margin);
+    const FPaneRect label = MakePaneLabelRect(PaneMin, PaneMax, Label, IdentityLabel);
+    const FPaneRect controls = MakePaneOverlayLayout(PaneMin, PaneMax).Bounds;
+    if (label.Height() > 0.0f) { min.y = label.Max.y + padding; }
+    if (controls.Width() > 0.0f && min.x + width > controls.Min.x && min.y < controls.Max.y)
+    {
+        min.y = controls.Max.y + padding;
+    }
+    const float availableHeight = PaneMax.y - margin - min.y;
+    if (wrapWidth < ImGui::GetFontSize() || availableHeight < lineHeight + padding * 2.0f)
+    {
+        return false;
+    }
+
+    FExifOverlayState& state = ExifOverlayStates[Doc];
+    const auto& metadata = Doc->GetImageData()->GetMetadata();
+    const int32_t language = static_cast<int32_t>(FLocalization::GetLanguage());
+    const bool bNewImage = state.Metadata != metadata || state.FilePath != Doc->GetFilePath();
+    if (bNewImage || state.WrapWidth != wrapWidth || state.FontSize != ImGui::GetFontSize() ||
+        state.Font != ImGui::GetFont() || state.Language != language || state.Lines.empty())
+    {
+        state.Metadata = metadata;
+        state.FilePath = Doc->GetFilePath();
+        state.WrapWidth = wrapWidth;
+        state.FontSize = ImGui::GetFontSize();
+        state.Font = ImGui::GetFont();
+        state.Language = language;
+        state.Lines.clear();
+        state.CopyText.clear();
+        if (bNewImage) { state.ScrollY = 0.0f; }
+        auto addText = [&](const std::string& text) { AppendWrappedExifLines(state.Lines, text, wrapWidth); };
+        addText(FLocalization::Text(EUiText::ExifHeading));
+        const auto rows = metadata ? BuildExifCaptureRows(*metadata) : std::vector<FExifCaptureRow>();
+        if (rows.empty())
+        {
+            addText(FLocalization::Text(metadata && metadata->bIncomplete
+                ? EUiText::ExifIncomplete : EUiText::ExifUnavailable));
+        }
+        for (const FExifCaptureRow& row : rows)
+        {
+            const std::string label = FLocalization::Text(row.Label);
+            addText(label + ": " + row.Value);
+            state.CopyText += label + "\t" + row.Value + "\r\n";
+        }
+    }
+
+    const float contentHeight = static_cast<float>(state.Lines.size()) * lineHeight;
+    const float height = std::min(availableHeight, contentHeight + padding * 2.0f);
+    const ImVec2 max(min.x + width, min.y + height);
+    const float viewHeight = height - padding * 2.0f;
+    const float maximumScroll = std::max(0.0f, contentHeight - viewHeight);
+    const ImVec2 savedCursor = ImGui::GetCursorScreenPos();
+    ImGui::PushID(static_cast<const void*>(Doc));
+    ImGui::SetCursorScreenPos(min);
+    ImGui::InvisibleButton("##ExifInformation", ImVec2(width, height), ImGuiButtonFlags_EnableNav);
+    const bool bHovered = ImGui::IsItemHovered();
+    ImGuiIO& io = ImGui::GetIO();
+    if (bHovered)
+    {
+        ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+        state.ScrollY -= io.MouseWheel * lineHeight * kExifWheelScrollLines;
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            state.bDraggingScrollbar = io.MousePos.x >= max.x - padding - scrollbarWidth;
+        }
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && !state.CopyText.empty())
+        {
+            ImGui::SetClipboardText(state.CopyText.c_str());
+            FToast::Show(FLocalization::Text(EUiText::CopiedToClipboard));
+        }
+        if (!ImGui::IsItemActive() && !state.CopyText.empty())
+        {
+            ImGui::SetTooltip("%s", FLocalization::Text(EUiText::ExifOverlayHelp));
+        }
+    }
+    if (ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+    {
+        if (state.bDraggingScrollbar && maximumScroll > 0.0f)
+        {
+            const float thumbHeight = std::min(viewHeight,
+                std::max(FUiScale::Apply(kExifMinimumScrollThumbHeight), viewHeight * viewHeight / contentHeight));
+            const float trackTravel = viewHeight - thumbHeight;
+            if (trackTravel > 0.0f)
+            {
+                state.ScrollY = (io.MousePos.y - min.y - padding - thumbHeight * kCenterAlignmentRatio)
+                    / trackTravel * maximumScroll;
+            }
+        }
+        else { state.ScrollY -= io.MouseDelta.y; }
+    }
+    if (ImGui::IsItemFocused())
+    {
+        if (ImGui::IsKeyPressed(ImGuiKey_Home)) { state.ScrollY = 0.0f; }
+        if (ImGui::IsKeyPressed(ImGuiKey_End)) { state.ScrollY = maximumScroll; }
+        if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) { state.ScrollY -= viewHeight; }
+        if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) { state.ScrollY += viewHeight; }
+    }
+    state.ScrollY = std::clamp(state.ScrollY, 0.0f, maximumScroll);
+    PendingExifVisuals.push_back({ &state, min.x, min.y, max.x, max.y,
+        static_cast<uint32_t>(ImGui::GetWindowViewport()->ID) });
+    ImGui::PopID();
+    ImGui::SetCursorScreenPos(savedCursor);
+    return ImGui::IsMouseHoveringRect(min, max);
+}
+
 void FImageViewer::RenderImage()
 {
+    // 文档槽位的像素可能已换代或关闭，释放其旧文本布局和元数据引用。
+    for (auto state = ExifOverlayStates.begin(); state != ExifOverlayStates.end();)
+    {
+        if (!bShowExif || !HasValidImage(state->first) ||
+            state->second.Metadata != state->first->GetImageData()->GetMetadata())
+        {
+            state = ExifOverlayStates.erase(state);
+        }
+        else { ++state; }
+    }
     const FImageData* imageData = Document ? Document->GetImageData() : nullptr;
     const ImVec2 canvasSize = ImGui::GetContentRegionAvail();
     const ImVec2 canvasPos = ImGui::GetCursorScreenPos();
@@ -1170,6 +1583,28 @@ void FImageViewer::RenderImage()
         MakePaneOverlayLayout(panes[1].Min, panes[1].Max).Bounds,
     };
 
+    const char* primaryLabel = nullptr;
+    const char* primaryIdentityLabel = nullptr;
+    std::string singleImageFileName;
+    if (bTiled)
+    {
+        primaryLabel = FLocalization::Text(EUiText::MainImage);
+    }
+    else if (bSingleImageSwitchEnabled)
+    {
+        singleImageFileName = GetDocumentFileName(Document);
+        primaryLabel = singleImageFileName.c_str();
+        primaryIdentityLabel = bSingleImageSwitchShowingCompare
+            ? FLocalization::Text(EUiText::CompareImage) : FLocalization::Text(EUiText::MainImage);
+    }
+    // 先提交 EXIF 的命中区域，画布才不会吞掉滚动/复制/拖动事件。
+    bool bMouseOverExif = PrepareExifOverlay(Document, panes[0].Min, panes[0].Max, primaryLabel, primaryIdentityLabel);
+    if (bTiled)
+    {
+        bMouseOverExif = PrepareExifOverlay(SecondaryDocument, panes[1].Min, panes[1].Max,
+            FLocalization::Text(EUiText::CompareImage), nullptr) || bMouseOverExif;
+    }
+
     // 画布允许后提交的悬浮按钮覆盖命中；同时显式排除控件矩形，
     // 避免点镜像时顺带拖动画面或弹出像素探针。
     ImGui::SetNextItemAllowOverlap();
@@ -1178,7 +1613,7 @@ void FImageViewer::RenderImage()
     const ImVec2 cursorAfterCanvas = ImGui::GetCursorScreenPos();
     ImGuiIO& io = ImGui::GetIO();
 
-    bool bMouseOverOverlay = overlayRects[0].Contains(io.MousePos);
+    bool bMouseOverOverlay = overlayRects[0].Contains(io.MousePos) || bMouseOverExif;
 
     if (bTiled)
     {
@@ -1513,23 +1948,6 @@ void FImageViewer::RenderImage()
 
     // 这些绘制命令排在图像的 OpenGL 回调及状态复位命令之后，
     // 因而背景、图标和命中都位于同一个预览窗口的最上层。
-    const char* primaryLabel = nullptr;
-    const char* primaryIdentityLabel = nullptr;
-    std::string singleImageFileName;
-
-    if (bTiled)
-    {
-        primaryLabel = FLocalization::Text(EUiText::MainImage);
-    }
-    else if (bSingleImageSwitchEnabled)
-    {
-        singleImageFileName = GetDocumentFileName(Document);
-        primaryLabel = singleImageFileName.c_str();
-        primaryIdentityLabel = bSingleImageSwitchShowingCompare
-            ? FLocalization::Text(EUiText::CompareImage)
-            : FLocalization::Text(EUiText::MainImage);
-    }
-
     RenderPaneOverlay(
         Document,
         panes[0].Min,
@@ -1594,8 +2012,6 @@ void FImageViewer::RenderPaneOverlay(
 
     const float buttonSize = ImGui::GetFrameHeight();
     const float overlayPadding = FUiScale::Apply(kOverlayPadding);
-    const float overlayMargin = FUiScale::Apply(kOverlayMargin);
-    const float groupHeight = buttonSize + overlayPadding * 2.0f;
     const FPaneOverlayLayout layout = MakePaneOverlayLayout(PaneMin, PaneMax);
     const bool bCanRenderControls = layout.Bounds.Width() > 0.0f;
     const ImVec2 groupMin = layout.OrientationGroup.Min;
@@ -1620,7 +2036,6 @@ void FImageViewer::RenderPaneOverlay(
 
     if (Label && *Label)
     {
-        const ImVec2 textSize = ImGui::CalcTextSize(Label);
         const bool bHasIdentityLabel = IdentityLabel && *IdentityLabel;
         const ImVec2 identityTextSize = bHasIdentityLabel
             ? ImGui::CalcTextSize(IdentityLabel)
@@ -1628,40 +2043,11 @@ void FImageViewer::RenderPaneOverlay(
         const float identityWidth = bHasIdentityLabel
             ? identityTextSize.x + overlayPadding * 2.0f
             : 0.0f;
-        ImVec2 labelMin(PaneMin.x + overlayMargin, PaneMin.y + overlayMargin);
-        ImVec2 labelMax(
-            labelMin.x + identityWidth + textSize.x + overlayPadding * 2.0f,
-            labelMin.y + groupHeight);
-        const float paneLabelMaxX = PaneMax.x - overlayMargin;
+        const FPaneRect labelRect = MakePaneLabelRect(PaneMin, PaneMax, Label, IdentityLabel);
+        const ImVec2 labelMin = labelRect.Min;
+        const ImVec2 labelMax = labelRect.Max;
 
-        if (bCanRenderControls)
-        {
-            const float topRowMaxX = groupMin.x - overlayPadding;
-            const float minimumFileTextWidth = ImGui::GetFontSize();
-            const float minimumLabelWidth =
-                identityWidth + overlayPadding * 2.0f + minimumFileTextWidth;
-            const bool bOverlapsControls = labelMax.x > topRowMaxX;
-            const bool bTopRowHasUsefulWidth =
-                topRowMaxX >= labelMin.x + minimumLabelWidth;
-
-            if (bOverlapsControls && !bTopRowHasUsefulWidth)
-            {
-                // 只有按钮左侧连“完整身份 + 一个字宽”都放不下时才换行；
-                // 长文件名优先留在第一行做 ellipsis，避免低矮 pane 中整块消失。
-                labelMin.y = groupMax.y + overlayPadding;
-                labelMax.y = labelMin.y + groupHeight;
-            }
-            else
-            {
-                labelMax.x = std::min(labelMax.x, topRowMaxX);
-            }
-        }
-
-        // 动态文件名可能超过 pane 宽度；底色必须留在画布内，绘制阶段会自动加省略号。
-        labelMax.x = std::min(labelMax.x, paneLabelMaxX);
-
-        if (labelMax.x > labelMin.x + identityWidth + overlayPadding * 2.0f &&
-            labelMax.y <= PaneMax.y - overlayMargin)
+        if (labelRect.Height() > 0.0f)
         {
             if (visual)
             {
@@ -2459,28 +2845,29 @@ void FImageViewer::RenderToolbar()
         }
     }
 
+    const int32_t rightButtonCount = (bTiled ? kToolbarLayoutButtonCount : 0) + 1;
+    const float rightGroupWidth =
+        ImGui::GetFrameHeight() * static_cast<float>(rightButtonCount)
+        + ImGui::GetStyle().ItemSpacing.x * static_cast<float>(rightButtonCount - 1);
+    const float rightGroupStartX = std::max(ImGui::GetWindowContentRegionMin().x,
+        ImGui::GetWindowContentRegionMax().x - rightGroupWidth);
+    const float rightGroupStartScreenX = ImGui::GetWindowPos().x + rightGroupStartX;
+
+    // 布局按钮与 EXIF 统一靠右；窄窗口下整组换行，避免盖住缩放输入框。
+    if (ImGui::GetItemRectMax().x + FUiScale::Apply(kToolbarLayoutGap)
+        <= rightGroupStartScreenX)
+    {
+        ImGui::SameLine();
+    }
+    else
+    {
+        ImGui::NewLine();
+    }
+
+    ImGui::SetCursorPosX(rightGroupStartX);
+
     if (bTiled)
     {
-        const float buttonSize = ImGui::GetFrameHeight();
-        const float layoutWidth =
-            buttonSize * static_cast<float>(kToolbarLayoutButtonCount)
-            + ImGui::GetStyle().ItemSpacing.x;
-        const float layoutStartX = ImGui::GetWindowContentRegionMax().x - layoutWidth;
-        const float layoutStartScreenX = ImGui::GetWindowPos().x + layoutStartX;
-
-        // 正常宽度下固定在同一行最右侧；窗口过窄时换到下一行，避免盖住缩放输入框。
-        if (ImGui::GetItemRectMax().x + FUiScale::Apply(kToolbarLayoutGap)
-            <= layoutStartScreenX)
-        {
-            ImGui::SameLine();
-        }
-        else
-        {
-            ImGui::NewLine();
-        }
-
-        ImGui::SetCursorPosX(layoutStartX);
-
         if (FUiIcons::ViewerButton(
                 "##TileHorizontal",
                 FUiIcons::EViewerGlyph::TileHorizontal,
@@ -2500,6 +2887,15 @@ void FImageViewer::RenderToolbar()
         {
             SetTileLayout(ETileLayout::Vertical);
         }
+
+        ImGui::SameLine();
+    }
+
+    if (FUiIcons::ViewerButton("##ShowExif", FUiIcons::EViewerGlyph::Exif,
+            FLocalization::Text(bShowExif ? EUiText::HideExif : EUiText::ShowExif), bShowExif))
+    {
+        bShowExif = !bShowExif;
+        LOGI(kImageViewerLogTag, "EXIF overlay %s", bShowExif ? "enabled" : "disabled");
     }
 
     // 色彩标准 / 数值范围 / 通道隔离都在属性面板里设置：

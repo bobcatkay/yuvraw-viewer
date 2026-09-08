@@ -355,4 +355,5 @@
     </Image>
   </ItemGroup>
   <ItemGroup><ClInclude Include="src\Core\FUiResources.h"><Filter>头文件</Filter></ClInclude></ItemGroup>
+  <ItemGroup><ClInclude Include="src\Image\FImageMetadata.h"><Filter>头文件</Filter></ClInclude></ItemGroup>
 </Project>

@@ -49,6 +49,7 @@ namespace FUiIcons
         TileHorizontal,         ///< 水平并联：左右两个极简圆角框
         TileVertical,           ///< 垂直并联：由水平组件旋转 90° 生成
         Close,                  ///< 关闭当前图片：两条交叉线组成的 x
+        Exif,                   ///< EXIF 信息：圆角信息卡片与 i 标记
     };
 
     /**
@@ -66,6 +67,9 @@ namespace FUiIcons
      * @param Size  外接正方形边长
      */
     void DrawViewerGlyph(ImDrawList* DrawList, EViewerGlyph Glyph, const ImVec2& Pos, float Size);
+
+    /// 信息浮层复用查看器图标的前景色，避免两处分别维护透明度。
+    ImU32 GetViewerGlyphColor();
 
     /**
      * 查看器图标按钮（正方形，边长为一个控件行高）

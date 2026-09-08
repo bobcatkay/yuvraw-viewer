@@ -29,7 +29,8 @@ src/
     FDisplaySettings.h     EChannelView + FDisplaySettings（三轴色彩 + 色调映射/曝光，**按文档存**）
     FImageFormatDesc       **格式描述表** —— 整个项目的地基，详见 formats.md
     FResolutionGuess       由文件大小 + 格式反推可能的分辨率（详见 loading.md）
-    FImageData             图像数据容器（尺寸/格式/stride/位深布局/像素）
+    FImageData             图像数据容器（尺寸/格式/stride/位深布局/像素/只读元数据）
+    FImageMetadata         WIC 元数据查询路径、格式化值及不完整标记；不持有 COM 对象
     FImageLoadParams       无头格式的加载参数
     FImageLoader           加载器接口 + FImageLoaderFactory 注册表
     FRawImageLoader        **所有无头格式的通用加载器**（含 MIPI RAW10/12 解包）
@@ -42,7 +43,7 @@ src/
   UI/
     FMenuBar               文件/设置/帮助菜单（文件菜单留了 extras 插槽给"最近打开"）
     FFileExplorer          目录浏览 + 图像文件过滤 + Shift/Ctrl 多选 + 右键"添加为对比图/导出"
-    FImageViewer           按文档槽位保存显示模式/缩放平移/镜像旋转、像素探针、并排对比、局部加载动画
+    FImageViewer           按文档槽位保存显示模式/缩放平移/镜像旋转、像素探针、并排对比、局部加载动画、可滚动 EXIF 浮层
     FPropertyPanel         编辑对象切换 + 格式/分辨率(含候选下拉)/stride/位深/Bayer + 色彩标准/范围/通道
     FHistogramPanel        RGB + 亮度直方图（降采样统计）
     FComparePanel          对比图选择、移除主图/对比图、差值计算、统计量、显示目标切换

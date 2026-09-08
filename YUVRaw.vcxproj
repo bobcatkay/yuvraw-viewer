@@ -255,6 +255,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\Copy
     <ClInclude Include="src\UI\FHistogramPanel.h" />
     <ClInclude Include="src\UI\FComparePanel.h" />
     <ClInclude Include="src\Image\FImageData.h" />
+    <ClInclude Include="src\Image\FImageMetadata.h" />
     <ClInclude Include="src\Image\FImageFormat.h" />
     <ClInclude Include="src\Image\FImageFormatDesc.h" />
     <ClInclude Include="src\Image\FImageLimits.h" />
