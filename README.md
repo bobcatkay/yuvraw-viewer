@@ -11,6 +11,8 @@ A Windows image viewer for YUV, Bayer RAW, DNG, and everyday image formats. Insp
 ## Features
 
 - **Browse and inspect** — Drag and drop images, browse folders, zoom, pan, rotate, and mirror. Inspect pixel values, individual channels, and histograms.
+- **View very large images** — Open very high-resolution images, zoom in to inspect details, and pan across the image.
+- **Display EXIF information** — View available shooting parameters, including date taken, camera and lens, shutter speed, aperture, ISO, and focal length. Toggle the overlay from the viewer toolbar and right-click it to copy the displayed parameters.
 - **Compare images** — Switch between two images, tile them side by side, or view their difference. Check maximum and mean difference, differing-pixel ratio, and PSNR.
 - **Configure raw images** — Set format, dimensions, row stride, bit depth, and color interpretation. Save reusable format presets and remember image properties.
 - **Preview HDR** — View PQ/HLG images, adjust exposure and tone mapping, and use HDR output on supported Windows displays and drivers.
@@ -26,8 +28,6 @@ A Windows image viewer for YUV, Bayer RAW, DNG, and everyday image formats. Insp
 | YUV | I420, YV12, YUV422P, YUV444P, NV12, NV21, NV16, YUY2, UYVY, P010, P210, YUV420SP16 |
 | Bayer RAW | RGGB, BGGR, GRBG, GBRG; 8/10/12/14/16-bit, including packed RAW10/12/14 |
 | DNG | Preview using camera metadata |
-
-Currently displays the **first frame only**. RAW/DNG support is for preview and inspection; exports are 8-bit SDR without transparency. See the [usage guide](docs/QUICK_START.md#format-limitations) for format-specific limits.
 
 ## Quick start
 
@@ -46,6 +46,7 @@ The interface defaults to English. Change it under **Settings → Language** and
 | Fit to window / 1:1 | `Ctrl + 0` / `Ctrl + 1` |
 | Reset view / switch image in single-image comparison | Left double-click / left-click |
 | Copy pixel probe information | Right-click a valid image pixel |
+| Show / hide EXIF | Information-card icon in the viewer's top toolbar (off by default) |
 
 You can also open images from the command line (replace the example paths with your own):
 
