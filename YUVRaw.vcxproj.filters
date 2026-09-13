@@ -319,6 +319,9 @@
     <ClInclude Include="src\Image\FImageSampler.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="src\Image\FCodeHistogram.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="src\Image\FColorTransform.h">
       <Filter>头文件</Filter>
     </ClInclude>

@@ -19,7 +19,8 @@ YUVRaw 是 C++17 / MSVC v145 的 Windows 桌面程序。窗口由 GLFW 管理，
 | `Image/FRawImageLoader` | 无头 RGB/灰度/YUV/Bayer 首帧读取，packed RAW 解包及字节序转换 |
 | `Image/FWicImageLoader`、`FDngImageLoader` | 常规图片首帧解码、LibRaw DNG 解码 |
 | `Image/FImageLimits` | 尺寸、像素数、单帧字节数与防溢出算术 |
-| `Image/FColorTransform`、`FImageSampler` | CPU 色彩参考实现、像素探针、RGB8 转换 |
+| `Image/FColorTransform`、`FImageSampler` | CPU 色彩参考实现、源 RGB 采样、像素探针、SDR RGB8 转换 |
+| `Image/FCodeHistogram.h` | 纯逻辑头文件：完整位深分桶、越界计数及保留全部计数的绘图聚合 |
 | `Image/FImageCompare`、`FImageExporter`、`FWebpEncoder` | 差值和统计、SDR RGB8 导出、自研 VP8L 无损编码 |
 | `UI/` | 文件浏览、查看器、属性、直方图、对比、导出、主题、图标和提示 |
 | `gl/FTexture`、`FTextureData` | 单纹理资源、按格式表建立和上传多平面纹理 |
@@ -60,7 +61,11 @@ flowchart LR
 
 `FImageFormatDesc` 同时驱动帧字节数、平面尺寸、纹理格式、着色器选择及属性面板。新增枚举必须追加，保留已持久化的数值；UI 展示顺序独立配置。packed RAW 在加载时解包为内部 Bayer16，字节序转换也在读取阶段完成。
 
-YCbCr 矩阵、原色和传输函数是三个独立属性，不能由位深互相推断。CPU `FColorTransform` 与 GLSL `FShaders.h` 按同一处理顺序实现转换、曝光、色调映射和超范围显示；探针、直方图、差值与导出共享 CPU 解读。Bayer 是传感器线性读数，单独进行基础预览。DNG 由 LibRaw 使用元数据处理成 sRGB RGBA8。
+YCbCr 矩阵、原色和传输函数是三个独立属性，不能由位深互相推断。CPU `FColorTransform` 与 GLSL `FShaders.h` 共用解码和各色彩阶段的数学约定，只有同一取样域、同一输出目标的结果才应保持一致。`FPixelSample::Rgb` 为探针色块、差值与导出提供 SDR 预览值；`SourceRgb` 在 YUV 范围还原和矩阵转换后、传输函数、曝光、映射与裁剪前保留源码值。Bayer 在传感器码值域做双线性去马赛克。DNG 由 LibRaw 使用元数据处理成 sRGB RGBA8。
+
+直方图统一使用 `SourceRgb`，保留 HLG/PQ 编码。`GetSourceBitDepth()` 决定 `0..2^depth-1` 的完整码值桶：P010 按 10 位而非 16 位容器统计；可配置 RAW 按有效位深；RGB10_A2 的 RGB 按 10 位，独立的 2 位 alpha 不影响范围；已经解码为 RGBA8 的图像按 8 位统计。Luma 是源编码值的亮度代理，YUV 使用所选矩阵系数，不是 nit 亮度。
+
+`FCodeHistogram` 保存全部码值桶，将低于和高于范围的计数单列，不堆入端点。面板按可见宽度汇总每个码值区间内的所有桶，再应用可选的纵轴对数刻度；悬浮提示显示真实码值区间及未经对数变换的采样点数。
 
 导出顺序为源像素解释 → RGB8 → 等比例重采样 → 编码；缩小使用面积平均，放大使用双线性。当前图片导出直接使用已加载数据和设置，批量导出逐个加载。输出为 SDR RGB8，不保存输入 alpha、传感器位深或 HDR 元数据。
 

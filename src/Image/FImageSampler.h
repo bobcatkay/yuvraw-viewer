@@ -9,7 +9,7 @@
 #include <vector>
 
 /**
- * 单个像素的采样结果，供像素探针显示
+ * 单个像素的采样结果，供像素探针、直方图和 CPU 图像转换使用
  */
 struct FPixelSample
 {
@@ -37,7 +37,15 @@ struct FPixelSample
             : MaxValue;
     }
 
-    /// 转换到显示空间后的 RGB（0-1），Bayer 时为双线性去马赛克结果
+    /**
+     * 按有效位深归一化的源 RGB 码值，供直方图统计。
+     * YUV 已完成范围还原与矩阵转换，但未经过 EOTF、曝光、色调映射或裁剪；
+     * PQ/HLG 仍保留对应的非线性编码，超出 [0,1] 的分量也原样保留。
+     * Bayer 使用源传感器码值域的双线性去马赛克结果，不套用传输函数。
+     */
+    float SourceRgb[3] = { 0.0f, 0.0f, 0.0f };
+
+    /// SDR 预览输出 RGB（0-1），Bayer 时为双线性去马赛克结果；不代表 HDR 屏幕输出
     float Rgb[3] = { 0.0f, 0.0f, 0.0f };
 
     /**
@@ -77,7 +85,8 @@ namespace FImageSampler
     /**
      * 展开采样上下文
      *
-     * CPU 侧的目标永远是 8bit sRGB（导出/直方图/差值/探针色块），与屏幕是不是 HDR 无关。
+     * Rgb 固定为 SDR 预览输出（导出/差值/探针色块），与屏幕是不是 HDR 无关。
+     * 直方图使用进入显示色彩管线前的 SourceRgb。
      */
     FSampleContext MakeContext(
         const FImageData& ImageData,
@@ -95,10 +104,10 @@ namespace FImageSampler
         FPixelSample& OutSample);
 
     /**
-     * 读取指定像素的原始分量值，并按显示设置换算成显示 RGB
+     * 读取指定像素的原始分量值、源 RGB 码值及 SDR 预览 RGB
      *
-     * 走的是与着色器完全相同的色彩管线（FColorTransform::ApplyPipeline），
-     * 所以探针给出的颜色就是屏幕上那个像素的颜色。
+     * 与着色器共用色彩数学（FColorTransform::ApplyPipeline），但 Rgb 的输出目标固定为 SDR。
+     * SourceRgb 在该管线执行前取值，不受 HDR 显示能力或色调映射影响。
      *
      * 这个重载每次都会展开一遍上下文，只适合像素探针这种一次一个点的场景。
      *
@@ -120,12 +129,12 @@ namespace FImageSampler
     /**
      * 把整幅图转换成紧凑的 RGB8 缓冲（每像素 3 字节）
      *
-     * 供直方图、差值对比与导出使用 —— 它们都需要在 CPU 侧拿到统一的 RGB。
+     * 供差值对比与导出使用，生成统一的 SDR 预览 RGB；直方图直接使用 SourceRgb。
      *
      * 色彩管线（含 YUV 矩阵、原色矩阵）在循环外只展开一次。
      * 传输函数不是 SDR 时每像素要算 9 次 pow()，4K 图会明显变慢 ——
      * 这条路径全都跑在 FAsyncJob 的工作线程上，界面有忙碌遮罩，
-     * 所以这里选择**精确计算而不是查表**：查表会让探针与导出/直方图相差不到 1 LSB，
+     * 所以这里选择**精确计算而不是查表**：查表会让探针与导出相差不到 1 LSB，
      * 但"两处结果不完全一致"这件事本身在调试工具里就是个坑。
      *
      * @param OutRgb 输出，大小为 Width * Height * 3

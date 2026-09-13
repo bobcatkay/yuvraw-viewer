@@ -263,6 +263,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\Copy
     <ClInclude Include="src\Image\FImageLoader.h" />
     <ClInclude Include="src\Image\FImageLoadParams.h" />
     <ClInclude Include="src\Image\FImageSampler.h" />
+    <ClInclude Include="src\Image\FCodeHistogram.h" />
     <ClInclude Include="src\Image\FColorTransform.h" />
     <ClInclude Include="src\Image\FDngImageLoader.h" />
     <ClInclude Include="src\Image\FRawImageLoader.h" />

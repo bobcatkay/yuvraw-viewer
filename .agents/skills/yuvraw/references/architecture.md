@@ -36,7 +36,8 @@ src/
     FRawImageLoader        **所有无头格式的通用加载器**（含 MIPI RAW10/12 解包）
     FWicImageLoader        PNG/JPEG/BMP/TIFF/GIF/HEIF（走 Windows WIC，无第三方依赖）
     FColorTransform        **整条色彩管线的唯一真值来源**：YUV 矩阵 + EOTF + 原色 + 色调映射
-    FImageSampler          单像素采样（像素探针）+ 整图转 RGB8
+    FImageSampler          源 RGB 码值/像素探针采样 + 整图转 SDR RGB8
+    FCodeHistogram.h       无 GL/UI 依赖：完整位深分桶、越界计数、保留全部计数的绘图聚合
     FImageCompare          差值图 + 最大差/平均差/差异占比/PSNR
     FImageExporter         导出：转 RGB8 -> 等比例重采样 -> 编码（PNG/JPEG/BMP 走 WIC）
     FWebpEncoder           **自研无损 WebP(VP8L) 编码器** —— Windows 只有解码器，详见 export.md

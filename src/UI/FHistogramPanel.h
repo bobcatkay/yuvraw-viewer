@@ -1,9 +1,9 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
-#include <string>
+#include <vector>
 
+#include "Image/FCodeHistogram.h"
 #include "Image/FDisplaySettings.h"
 #include "Image/FImageFormat.h"
 
@@ -14,12 +14,11 @@ class FImageData;
  *
  * 统计在 CPU 侧完成，只在图像或色彩设置变化时重算一次，不是每帧算。
  * 大图会降采样：直方图看的是分布形状，全量统计和采样 25 万点的结果肉眼无法区分。
+ * 统计传输函数前的源 RGB 码值，按实际有效位深分桶，绘制时汇总可见码值区间。
  */
 class FHistogramPanel
 {
 public:
-    static constexpr int32_t kBinCount = 256;
-
     /// 大图降采样后的目标采样点数
     static constexpr int32_t kTargetSampleCount = 250000;
 
@@ -40,16 +39,18 @@ public:
         EBayerPattern BayerPattern);
 
 private:
-    using FHistogramBins = std::array<float, kBinCount>;
+    using FPlotBins = std::vector<float>;
 
-    FHistogramBins BuildDisplayBins(const FHistogramBins& Bins) const;
-    void RenderOverlayPlot();
-    void RenderPlot(const char* Label, const FHistogramBins& Bins, uint32_t Color);
+    FPlotBins BuildDisplayBins(const FCodeHistogram& Histogram, int32_t PlotCount) const;
+    /// Channel 为空时叠加四条曲线，否则绘制单通道柱状图。
+    void RenderPlot(const char* Id, const FCodeHistogram* Channel = nullptr, uint32_t Color = 0);
+    void RenderAxis() const;
+    void RenderRangeCounts(const FCodeHistogram& Histogram, const char* Label) const;
 
-    FHistogramBins Red;
-    FHistogramBins Green;
-    FHistogramBins Blue;
-    FHistogramBins Luma;
+    FCodeHistogram Red;
+    FCodeHistogram Green;
+    FCodeHistogram Blue;
+    FCodeHistogram Luma;
 
     bool bHasData;
     int64_t SampleCount;

@@ -19,7 +19,8 @@ YUVRaw is a Windows desktop application built with C++17 / MSVC v145. GLFW manag
 | `Image/FRawImageLoader` | First-frame reads of headerless RGB/grayscale/YUV/Bayer, packed RAW unpacking, and endian conversion |
 | `Image/FWicImageLoader`, `FDngImageLoader` | First-frame standard-image decoding and LibRaw DNG decoding |
 | `Image/FImageLimits` | Dimensions, pixel counts, frame byte limits, and overflow-safe arithmetic |
-| `Image/FColorTransform`, `FImageSampler` | CPU color reference, pixel probe, and RGB8 conversion |
+| `Image/FColorTransform`, `FImageSampler` | CPU color reference, source RGB sampling, pixel probe, and SDR RGB8 conversion |
+| `Image/FCodeHistogram.h` | Pure header-only logic for full bit-depth bins, out-of-range counts, and plot aggregation that preserves all counts |
 | `Image/FImageCompare`, `FImageExporter`, `FWebpEncoder` | Differences/statistics, SDR RGB8 export, and in-project lossless VP8L encoding |
 | `UI/` | File browser, viewer, properties, histogram, comparison, export, themes, icons, and tooltips |
 | `gl/FTexture`, `FTextureData` | Single-texture resources and descriptor-driven multiplane texture creation/upload |
@@ -60,7 +61,11 @@ Background difference and export jobs read current document pixels. Operations t
 
 `FImageFormatDesc` drives frame sizes, plane geometry, texture formats, shader selection, and Properties. Append new enum values to preserve persisted numeric values; UI ordering is independent. Loading unpacks packed RAW into internal Bayer16 and handles endian conversion.
 
-YCbCr matrix, primaries, and transfer function are independent and must not be inferred from bit depth. CPU `FColorTransform` and GLSL `FShaders.h` use the same sequence for conversion, exposure, tone mapping, and out-of-range display. Probe, histogram, difference, and export share CPU interpretation. Bayer contains sensor-linear samples and follows a separate basic preview path. LibRaw processes DNG metadata into sRGB RGBA8.
+YCbCr matrix, primaries, and transfer function are independent and must not be inferred from bit depth. CPU `FColorTransform` and GLSL `FShaders.h` share decoding and color-stage mathematics; results are comparable at the same stage and output target. `FPixelSample::Rgb` provides SDR preview values for probe swatches, differences, and export. Its `SourceRgb` preserves source codes after YUV range/matrix conversion and before the transfer function, exposure, tone mapping, or clipping. Bayer uses bilinear interpolation in the sensor-code domain. LibRaw processes DNG metadata into sRGB RGBA8.
+
+Histograms consistently use `SourceRgb`, retaining HLG/PQ encoding. `GetSourceBitDepth()` selects one bin per code over `0..2^depth-1`: P010 uses 10 bits despite its 16-bit container; configurable RAW uses its effective depth; RGB10_A2 uses 10-bit RGB independently of its 2-bit alpha; images already decoded to RGBA8 use 8 bits. Luma is an encoded-value brightness proxy, using the selected YUV matrix coefficients for YUV, rather than nit luminance.
+
+`FCodeHistogram` retains the full bins and reports underflow/overflow separately instead of accumulating them at the endpoints. The panel sums every bin into visible-width code intervals before applying the optional logarithmic count scale. Tooltips report each interval's actual code limits and untransformed sample count.
 
 Export interprets source pixels, converts to RGB8, resamples with preserved aspect ratio, then encodes. Downscaling uses area averaging; upscaling uses bilinear interpolation. Current-image export reads the loaded data and settings; batch export loads files individually. Output is SDR RGB8 without input alpha, sensor bit depth, or HDR metadata.
 

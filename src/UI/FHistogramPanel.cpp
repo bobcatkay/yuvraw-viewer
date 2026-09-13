@@ -3,31 +3,42 @@
 
 #include "Core/FUserSettings.h"
 #include "Image/FImageData.h"
+#include "Image/FImageFormatDesc.h"
 #include "Image/FImageSampler.h"
 #include "FUiScale.h"
+#include "Util.h"
 
 #include <imgui.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdio>
+#include <numeric>
 
 namespace
 {
-    /// BT.601 亮度权重，用于把 RGB 折算成一条亮度曲线
-    constexpr float kLumaR = 0.299f;
-    constexpr float kLumaG = 0.587f;
-    constexpr float kLumaB = 0.114f;
-
+    constexpr const char* kHistogramLogTag = "Histogram";
+    constexpr int32_t kHistogramChannelCount = 4;
     constexpr float kHistogramPlotHeight = 80.0f;
     constexpr float kMinimumPlotExtent = 1.0f;
+    constexpr float kBinCenterOffset = 0.5f;
     constexpr float kOverlayLumaLineThickness = 2.0f;
     constexpr float kOverlayColorLineThickness = 1.5f;
-    constexpr float kOverlayGuideLineThickness = 1.0f;
+    constexpr float kGuideLineThickness = 1.0f;
+    constexpr float kTooltipWrapCharacters = 28.0f;
+    constexpr size_t kAxisLabelCapacity = 32;
 
     constexpr uint32_t kRedPlotColor = IM_COL32(220, 80, 80, 255);
     constexpr uint32_t kGreenPlotColor = IM_COL32(80, 200, 80, 255);
     constexpr uint32_t kBluePlotColor = IM_COL32(90, 130, 230, 255);
     constexpr uint32_t kLumaPlotColor = IM_COL32(160, 160, 160, 255);
+
+    float CountRange(const FCodeHistogram& Histogram, const FCodeHistogram::FCodeRange& Range)
+    {
+        const auto& bins = Histogram.GetBins();
+        return std::accumulate(bins.begin() + Range.First, bins.begin() + Range.Last + 1, 0.0f);
+    }
 }
 
 FHistogramPanel::FHistogramPanel()
@@ -37,10 +48,6 @@ FHistogramPanel::FHistogramPanel()
     , bOverlay(FUserSettings::GetHistogramOverlayEnabled())
     , bLogScale(FUserSettings::GetHistogramLogScaleEnabled())
 {
-    Red.fill(0.0f);
-    Green.fill(0.0f);
-    Blue.fill(0.0f);
-    Luma.fill(0.0f);
 }
 
 void FHistogramPanel::ResetPreferences()
@@ -54,11 +61,11 @@ void FHistogramPanel::Rebuild(
     const FDisplaySettings& Display,
     EBayerPattern BayerPattern)
 {
-    Red.fill(0.0f);
-    Green.fill(0.0f);
-    Blue.fill(0.0f);
-    Luma.fill(0.0f);
-
+    const int32_t previousBitDepth = Red.GetBitDepth();
+    Red.Clear();
+    Green.Clear();
+    Blue.Clear();
+    Luma.Clear();
     bHasData = false;
     SampleCount = 0;
     SampleStep = 1;
@@ -68,234 +75,263 @@ void FHistogramPanel::Rebuild(
         return;
     }
 
+    // 使用加载后数据的有效位深：P010 是 10 位，解包 RAW 也不能按 16 位容器统计。
+    // WIC / DNG 已转为 RGBA8 的图像则应按当前内存中的 8 位码值统计。
+    const int32_t bitDepth = ImageData->GetSourceBitDepth();
+    if (!Red.Reset(bitDepth))
+    {
+        LOGW(kHistogramLogTag, "Unsupported histogram bit depth: %d", bitDepth);
+        return;
+    }
+    Green.Reset(bitDepth);
+    Blue.Reset(bitDepth);
+    Luma.Reset(bitDepth);
+
     const int32_t width = ImageData->GetWidth();
     const int32_t height = ImageData->GetHeight();
     const int64_t pixelCount = static_cast<int64_t>(width) * height;
-
-    // 降采样步长：让总采样点数落在目标附近
-    int32_t step = 1;
-
     if (pixelCount > kTargetSampleCount)
     {
-        step = static_cast<int32_t>(std::sqrt(static_cast<double>(pixelCount) / kTargetSampleCount));
-        step = std::max(1, step);
+        SampleStep = std::max(1, static_cast<int32_t>(
+            std::sqrt(static_cast<double>(pixelCount) / kTargetSampleCount)));
     }
 
-    SampleStep = step;
+    // YUV 亮度使用所选矩阵的系数，从 R'G'B' 恢复对应的 Y'。
+    // Bayer 不参与色彩解释，固定使用默认原色系数计算去马赛克码值的亮度代理。
+    const EColorModel colorModel = FImageFormatDesc::Get(ImageData->GetFormat()).ColorModel;
+    float lumaCoefficients[3];
+    if (colorModel == EColorModel::YUV)
+    {
+        FColorTransform::GetLumaCoefficients(Display.ColorSpace, lumaCoefficients[0], lumaCoefficients[2]);
+        lumaCoefficients[1] = 1.0f - lumaCoefficients[0] - lumaCoefficients[2];
+    }
+    else
+    {
+        FColorTransform::GetPrimariesLumaCoef(
+            colorModel == EColorModel::Bayer ? EColorPrimaries::BT709 : Display.Primaries,
+            lumaCoefficients);
+    }
 
-    // 色彩管线只展开一次：25 万个采样点各建一遍矩阵会明显卡顿
+    // 复用采样上下文；SourceRgb 在 EOTF、曝光、色调映射及显示裁剪前取得。
     const FImageSampler::FSampleContext context =
         FImageSampler::MakeContext(*ImageData, Display, BayerPattern);
-
     FPixelSample sample;
-    int64_t counted = 0;
-
-    for (int32_t y = 0; y < height; y += step)
+    for (int32_t y = 0; y < height; y += SampleStep)
     {
-        for (int32_t x = 0; x < width; x += step)
+        for (int32_t x = 0; x < width; x += SampleStep)
         {
             if (!FImageSampler::SamplePixel(*ImageData, x, y, context, sample))
             {
                 continue;
             }
 
-            const int32_t r = std::clamp(static_cast<int32_t>(sample.Rgb[0] * 255.0f + 0.5f), 0, kBinCount - 1);
-            const int32_t g = std::clamp(static_cast<int32_t>(sample.Rgb[1] * 255.0f + 0.5f), 0, kBinCount - 1);
-            const int32_t b = std::clamp(static_cast<int32_t>(sample.Rgb[2] * 255.0f + 0.5f), 0, kBinCount - 1);
-
-            Red[r] += 1.0f;
-            Green[g] += 1.0f;
-            Blue[b] += 1.0f;
-
-            const float lumaValue = kLumaR * sample.Rgb[0] + kLumaG * sample.Rgb[1] + kLumaB * sample.Rgb[2];
-            const int32_t l = std::clamp(static_cast<int32_t>(lumaValue * 255.0f + 0.5f), 0, kBinCount - 1);
-            Luma[l] += 1.0f;
-
-            ++counted;
+            Red.Add(sample.SourceRgb[0]);
+            Green.Add(sample.SourceRgb[1]);
+            Blue.Add(sample.SourceRgb[2]);
+            Luma.Add(lumaCoefficients[0] * sample.SourceRgb[0]
+                + lumaCoefficients[1] * sample.SourceRgb[1]
+                + lumaCoefficients[2] * sample.SourceRgb[2]);
+            ++SampleCount;
         }
     }
 
-    SampleCount = counted;
-    bHasData = (counted > 0);
+    bHasData = SampleCount > 0;
+    if (previousBitDepth != bitDepth)
+    {
+        LOGD(kHistogramLogTag, "Source RGB histogram: bitDepth=%d maxCode=%d samples=%lld",
+             bitDepth, Red.GetMaxCode(), static_cast<long long>(SampleCount));
+    }
 }
 
-FHistogramPanel::FHistogramBins FHistogramPanel::BuildDisplayBins(const FHistogramBins& Bins) const
+FHistogramPanel::FPlotBins FHistogramPanel::BuildDisplayBins(
+    const FCodeHistogram& Histogram, int32_t PlotCount) const
 {
-    FHistogramBins display = Bins;
-
+    // 高位深的全部码值先汇总到可见列，再转换纵轴；不能抽取少数码值导致窄面板漏峰。
+    FPlotBins display = Histogram.BuildPlotBins(PlotCount);
     if (bLogScale)
     {
-        for (float& v : display)
+        for (float& value : display)
         {
-            v = std::log10(v + 1.0f);
+            value = std::log10(value + 1.0f);
         }
     }
-
     return display;
 }
 
-void FHistogramPanel::RenderOverlayPlot()
+void FHistogramPanel::RenderAxis() const
 {
-    const FHistogramBins redDisplay = BuildDisplayBins(Red);
-    const FHistogramBins greenDisplay = BuildDisplayBins(Green);
-    const FHistogramBins blueDisplay = BuildDisplayBins(Blue);
-    const FHistogramBins lumaDisplay = BuildDisplayBins(Luma);
+    char maximumLabel[kAxisLabelCapacity];
+    std::snprintf(maximumLabel, sizeof(maximumLabel),
+                  FLocalization::Text(EUiText::HistogramAxisCode), Red.GetMaxCode());
+    const float startX = ImGui::GetCursorPosX();
+    const float rightX = startX + ImGui::GetContentRegionAvail().x
+        - ImGui::CalcTextSize(maximumLabel).x;
 
-    // 四个通道必须共用同一纵轴，否则曲线高度无法横向比较。
-    const float maxValue = std::max({
-        *std::max_element(redDisplay.begin(), redDisplay.end()),
-        *std::max_element(greenDisplay.begin(), greenDisplay.end()),
-        *std::max_element(blueDisplay.begin(), blueDisplay.end()),
-        *std::max_element(lumaDisplay.begin(), lumaDisplay.end())});
-    const float scaleMax = maxValue > 0.0f ? maxValue : 1.0f;
+    ImGui::TextDisabled(FLocalization::Text(EUiText::HistogramAxisCode), 0);
+    // 窄窗口下让末端标签换行，避免为了放刻度而撑出水平滚动区域。
+    if (rightX >= startX + ImGui::GetItemRectSize().x + ImGui::GetStyle().ItemSpacing.x)
+    {
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(rightX);
+    }
+    ImGui::TextDisabled("%s", maximumLabel);
+}
 
+void FHistogramPanel::RenderRangeCounts(const FCodeHistogram& Histogram, const char* Label) const
+{
+    ImGui::PushTextWrapPos();
+    if (Histogram.GetBelowRangeCount() > 0 || Histogram.GetAboveRangeCount() > 0)
+    {
+        ImGui::TextDisabled(FLocalization::Text(EUiText::HistogramOutOfRangeCounts), Label,
+                            static_cast<long long>(Histogram.GetBelowRangeCount()),
+                            static_cast<long long>(Histogram.GetAboveRangeCount()));
+    }
+    if (Histogram.GetInvalidCount() > 0)
+    {
+        ImGui::TextDisabled(FLocalization::Text(EUiText::HistogramInvalidCount), Label,
+                            static_cast<long long>(Histogram.GetInvalidCount()));
+    }
+    ImGui::PopTextWrapPos();
+}
+
+void FHistogramPanel::RenderPlot(const char* Id, const FCodeHistogram* Channel, uint32_t Color)
+{
     const ImVec2 plotSize(
         std::max(ImGui::GetContentRegionAvail().x, kMinimumPlotExtent),
         FUiScale::Apply(kHistogramPlotHeight));
-    ImGui::InvisibleButton("##OverlayHistogram", plotSize);
-
+    ImGui::InvisibleButton(Id, plotSize);
+    if (!ImGui::IsItemVisible())
+    {
+        RenderAxis();
+        return;
+    }
     const bool bHovered = ImGui::IsItemHovered();
     const ImVec2 plotMin = ImGui::GetItemRectMin();
     const ImVec2 plotMax = ImGui::GetItemRectMax();
     const ImGuiStyle& style = ImGui::GetStyle();
     ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-    drawList->AddRectFilled(
-        plotMin,
-        plotMax,
-        ImGui::GetColorU32(ImGuiCol_FrameBg),
-        style.FrameRounding);
-
+    drawList->AddRectFilled(plotMin, plotMax, ImGui::GetColorU32(ImGuiCol_FrameBg), style.FrameRounding);
     if (style.FrameBorderSize > 0.0f)
     {
-        drawList->AddRect(
-            plotMin,
-            plotMax,
-            ImGui::GetColorU32(ImGuiCol_Border),
-            style.FrameRounding,
-            ImDrawFlags_None,
-            style.FrameBorderSize);
+        drawList->AddRect(plotMin, plotMax, ImGui::GetColorU32(ImGuiCol_Border),
+                          style.FrameRounding, ImDrawFlags_None, style.FrameBorderSize);
     }
 
-    const ImVec2 graphMin(
-        plotMin.x + style.FramePadding.x,
-        plotMin.y + style.FramePadding.y);
-    const ImVec2 graphMax(
-        plotMax.x - style.FramePadding.x,
-        plotMax.y - style.FramePadding.y);
-
-    if (graphMax.x <= graphMin.x || graphMax.y <= graphMin.y)
+    const ImVec2 graphMin(plotMin.x + style.FramePadding.x, plotMin.y + style.FramePadding.y);
+    const ImVec2 graphMax(plotMax.x - style.FramePadding.x, plotMax.y - style.FramePadding.y);
+    const float graphWidth = graphMax.x - graphMin.x;
+    const float graphHeight = graphMax.y - graphMin.y;
+    if (graphWidth <= 0.0f || graphHeight <= 0.0f)
     {
         return;
     }
 
-    auto DrawSeries = [&](const FHistogramBins& Bins, uint32_t Color, float Thickness)
-    {
-        std::array<ImVec2, kBinCount> points;
-        const float graphWidth = graphMax.x - graphMin.x;
-        const float graphHeight = graphMax.y - graphMin.y;
-        const float maximumBinIndex = static_cast<float>(kBinCount - 1);
-
-        for (int32_t index = 0; index < kBinCount; ++index)
-        {
-            const float xRatio = static_cast<float>(index) / maximumBinIndex;
-            const float yRatio = std::clamp(Bins[index] / scaleMax, 0.0f, 1.0f);
-            points[index] = ImVec2(
-                graphMin.x + xRatio * graphWidth,
-                graphMax.y - yRatio * graphHeight);
-        }
-
-        drawList->AddPolyline(
-            points.data(),
-            static_cast<int>(points.size()),
-            ImGui::GetColorU32(ImColor(Color).Value),
-            ImDrawFlags_None,
-            Thickness);
+    const int32_t plotCount = std::clamp(static_cast<int32_t>(graphWidth), 1,
+                                         static_cast<int32_t>(Red.GetBins().size()));
+    const FCodeHistogram* channels[kHistogramChannelCount] = {
+        Channel ? Channel : &Luma, &Red, &Green, &Blue
     };
-
-    const ImVec2 mousePosition = ImGui::GetIO().MousePos;
-    const bool bHoveringGraph = bHovered
-        && mousePosition.x >= graphMin.x
-        && mousePosition.x <= graphMax.x
-        && mousePosition.y >= graphMin.y
-        && mousePosition.y <= graphMax.y;
-    int32_t hoveredBin = 0;
-
-    if (bHoveringGraph)
+    const uint32_t colors[kHistogramChannelCount] = {
+        Channel ? Color : kLumaPlotColor, kRedPlotColor, kGreenPlotColor, kBluePlotColor
+    };
+    const EUiText labels[kHistogramChannelCount] = {
+        EUiText::Luma, EUiText::HistogramRed, EUiText::HistogramGreen, EUiText::HistogramBlue
+    };
+    const int32_t channelCount = Channel ? 1 : kHistogramChannelCount;
+    std::array<FPlotBins, kHistogramChannelCount> display;
+    float scaleMax = 0.0f;
+    for (int32_t channel = 0; channel < channelCount; ++channel)
     {
-        const float mouseRatio = std::clamp(
-            (mousePosition.x - graphMin.x) / (graphMax.x - graphMin.x),
-            0.0f,
-            1.0f);
-        hoveredBin = std::clamp(
-            static_cast<int32_t>(mouseRatio * static_cast<float>(kBinCount - 1) + 0.5f),
-            0,
-            kBinCount - 1);
+        display[channel] = BuildDisplayBins(*channels[channel], plotCount);
+        scaleMax = std::max(scaleMax, *std::max_element(display[channel].begin(), display[channel].end()));
     }
+    scaleMax = scaleMax > 0.0f ? scaleMax : 1.0f;
+
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    const bool bHoveringGraph = bHovered
+        && mouse.x >= graphMin.x && mouse.x <= graphMax.x
+        && mouse.y >= graphMin.y && mouse.y <= graphMax.y;
+    const float mouseRatio = std::clamp((mouse.x - graphMin.x) / graphWidth, 0.0f, 1.0f);
+    const int32_t hoveredBin = std::min(static_cast<int32_t>(mouseRatio * plotCount), plotCount - 1);
+    const float columnWidth = graphWidth / static_cast<float>(plotCount);
 
     drawList->PushClipRect(graphMin, graphMax, true);
-
-    // 亮度先打底，RGB 再覆盖；所有曲线只创建一个 ImGui 布局项。
-    DrawSeries(
-        lumaDisplay,
-        kLumaPlotColor,
-        FUiScale::Apply(kOverlayLumaLineThickness));
-    DrawSeries(
-        redDisplay,
-        kRedPlotColor,
-        FUiScale::Apply(kOverlayColorLineThickness));
-    DrawSeries(
-        greenDisplay,
-        kGreenPlotColor,
-        FUiScale::Apply(kOverlayColorLineThickness));
-    DrawSeries(
-        blueDisplay,
-        kBluePlotColor,
-        FUiScale::Apply(kOverlayColorLineThickness));
-
+    for (int32_t channel = 0; channel < channelCount; ++channel)
+    {
+        const ImU32 color = ImGui::GetColorU32(ImColor(colors[channel]).Value);
+        if (Channel)
+        {
+            for (int32_t index = 0; index < plotCount; ++index)
+            {
+                const float top = graphMax.y - display[channel][index] / scaleMax * graphHeight;
+                drawList->AddRectFilled(
+                    ImVec2(graphMin.x + index * columnWidth, top),
+                    ImVec2(graphMin.x + (index + 1) * columnWidth, graphMax.y),
+                    bHoveringGraph && index == hoveredBin
+                        ? ImGui::GetColorU32(ImGuiCol_PlotHistogramHovered) : color);
+            }
+        }
+        else
+        {
+            std::vector<ImVec2> points(static_cast<size_t>(plotCount));
+            for (int32_t index = 0; index < plotCount; ++index)
+            {
+                points[index] = ImVec2(
+                    graphMin.x + (index + kBinCenterOffset) * columnWidth,
+                    graphMax.y - display[channel][index] / scaleMax * graphHeight);
+            }
+            const float thickness = FUiScale::Apply(
+                channel == 0 ? kOverlayLumaLineThickness : kOverlayColorLineThickness);
+            if (plotCount == 1)
+            {
+                drawList->AddLine(ImVec2(graphMin.x, points[0].y),
+                                  ImVec2(graphMax.x, points[0].y), color, thickness);
+            }
+            else
+            {
+                drawList->AddPolyline(points.data(), plotCount, color, ImDrawFlags_None, thickness);
+            }
+        }
+    }
     if (bHoveringGraph)
     {
-        const float guideX = graphMin.x
-            + (static_cast<float>(hoveredBin) / static_cast<float>(kBinCount - 1))
-            * (graphMax.x - graphMin.x);
-        drawList->AddLine(
-            ImVec2(guideX, graphMin.y),
-            ImVec2(guideX, graphMax.y),
-            ImGui::GetColorU32(ImGuiCol_PlotLinesHovered),
-            FUiScale::Apply(kOverlayGuideLineThickness));
+        const float guideX = graphMin.x + (hoveredBin + kBinCenterOffset) * columnWidth;
+        drawList->AddLine(ImVec2(guideX, graphMin.y), ImVec2(guideX, graphMax.y),
+                          ImGui::GetColorU32(ImGuiCol_PlotLinesHovered),
+                          FUiScale::Apply(kGuideLineThickness));
     }
-
     drawList->PopClipRect();
 
     if (bHoveringGraph)
     {
+        const auto range = Red.GetCodeRange(hoveredBin, plotCount);
         ImGui::BeginTooltip();
-        ImGui::Text(FLocalization::Text(EUiText::HistogramBin), hoveredBin);
+        if (range.First == range.Last)
+        {
+            ImGui::Text(FLocalization::Text(EUiText::HistogramCode), range.First);
+        }
+        else
+        {
+            ImGui::Text(FLocalization::Text(EUiText::HistogramCodeRange), range.First, range.Last);
+        }
         ImGui::Separator();
-        ImGui::TextColored(ImColor(kRedPlotColor).Value, "R: %.0f", Red[hoveredBin]);
-        ImGui::TextColored(ImColor(kGreenPlotColor).Value, "G: %.0f", Green[hoveredBin]);
-        ImGui::TextColored(ImColor(kBluePlotColor).Value, "B: %.0f", Blue[hoveredBin]);
-        ImGui::TextColored(ImColor(kLumaPlotColor).Value, FLocalization::Text(EUiText::LumaValue), Luma[hoveredBin]);
+        for (int32_t channel = 0; channel < channelCount; ++channel)
+        {
+            const float count = CountRange(*channels[channel], range);
+            if (Channel)
+            {
+                ImGui::Text(FLocalization::Text(EUiText::HistogramCount), count);
+            }
+            else
+            {
+                ImGui::TextColored(ImColor(colors[channel]).Value,
+                    FLocalization::Text(EUiText::HistogramChannelCount),
+                    FLocalization::Text(labels[channel]), count);
+            }
+        }
         ImGui::EndTooltip();
     }
-}
-
-void FHistogramPanel::RenderPlot(const char* Label, const FHistogramBins& Bins, uint32_t Color)
-{
-    const FHistogramBins display = BuildDisplayBins(Bins);
-
-    const float maxValue = *std::max_element(display.begin(), display.end());
-
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor(Color).Value);
-    ImGui::PlotHistogram(Label,
-                         display.data(),
-                         static_cast<int>(display.size()),
-                         0,
-                         nullptr,
-                         0.0f,
-                         maxValue > 0.0f ? maxValue : 1.0f,
-                         ImVec2(-1.0f, FUiScale::Apply(kHistogramPlotHeight)));
-    ImGui::PopStyleColor();
+    RenderAxis();
 }
 
 void FHistogramPanel::Render()
@@ -303,18 +339,15 @@ void FHistogramPanel::Render()
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
     const bool bVisible = ImGui::Begin(FLocalization::WindowTitle(EUiText::Histogram));
     ImGui::PopStyleColor();
-
     if (!bVisible)
     {
         ImGui::End();
         return;
     }
-
     if (!bHasData)
     {
-        ImGui::Text(FLocalization::Text(EUiText::NoImageData));
+        ImGui::TextUnformatted(FLocalization::Text(EUiText::NoImageData));
         ImGui::End();
-
         return;
     }
 
@@ -322,40 +355,62 @@ void FHistogramPanel::Render()
     {
         FUserSettings::SetHistogramOverlayEnabled(bOverlay);
     }
-
     ImGui::SameLine();
-
     if (ImGui::Checkbox(FLocalization::Text(EUiText::HistogramLogScale), &bLogScale))
     {
         FUserSettings::SetHistogramLogScaleEnabled(bLogScale);
     }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(FLocalization::Text(EUiText::HistogramLogScaleHelp));
+    }
 
+    ImGui::PushTextWrapPos();
+    ImGui::TextDisabled(FLocalization::Text(EUiText::HistogramSourceCodes),
+                        Red.GetBitDepth(), Red.GetMaxCode());
+    ImGui::PopTextWrapPos();
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * kTooltipWrapCharacters);
+        ImGui::TextUnformatted(FLocalization::Text(EUiText::HistogramSourceCodesHelp));
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
     if (SampleStep > 1)
     {
-        ImGui::TextDisabled(FLocalization::Text(EUiText::HistogramSampleCount), static_cast<long long>(SampleCount), SampleStep);
+        ImGui::TextDisabled(FLocalization::Text(EUiText::HistogramSampleCount),
+                            static_cast<long long>(SampleCount), SampleStep, SampleStep);
     }
     else
     {
-        ImGui::TextDisabled(FLocalization::Text(EUiText::HistogramFullCount), static_cast<long long>(SampleCount));
+        ImGui::TextDisabled(FLocalization::Text(EUiText::HistogramFullCount),
+                            static_cast<long long>(SampleCount));
     }
-
     ImGui::Separator();
 
     if (bOverlay)
     {
-        RenderOverlayPlot();
+        RenderPlot("##OverlayHistogram");
+        RenderRangeCounts(Luma, FLocalization::Text(EUiText::Luma));
+        RenderRangeCounts(Red, FLocalization::Text(EUiText::HistogramRed));
+        RenderRangeCounts(Green, FLocalization::Text(EUiText::HistogramGreen));
+        RenderRangeCounts(Blue, FLocalization::Text(EUiText::HistogramBlue));
     }
     else
     {
-        ImGui::Text(FLocalization::Text(EUiText::Luma));
-        RenderPlot("##Luma", Luma, kLumaPlotColor);
-        ImGui::Text("R");
-        RenderPlot("##R", Red, kRedPlotColor);
-        ImGui::Text("G");
-        RenderPlot("##G", Green, kGreenPlotColor);
-        ImGui::Text("B");
-        RenderPlot("##B", Blue, kBluePlotColor);
+        ImGui::TextUnformatted(FLocalization::Text(EUiText::Luma));
+        RenderPlot("##Luma", &Luma, kLumaPlotColor);
+        RenderRangeCounts(Luma, FLocalization::Text(EUiText::Luma));
+        ImGui::TextUnformatted(FLocalization::Text(EUiText::HistogramRed));
+        RenderPlot("##R", &Red, kRedPlotColor);
+        RenderRangeCounts(Red, FLocalization::Text(EUiText::HistogramRed));
+        ImGui::TextUnformatted(FLocalization::Text(EUiText::HistogramGreen));
+        RenderPlot("##G", &Green, kGreenPlotColor);
+        RenderRangeCounts(Green, FLocalization::Text(EUiText::HistogramGreen));
+        ImGui::TextUnformatted(FLocalization::Text(EUiText::HistogramBlue));
+        RenderPlot("##B", &Blue, kBluePlotColor);
+        RenderRangeCounts(Blue, FLocalization::Text(EUiText::HistogramBlue));
     }
-
     ImGui::End();
 }

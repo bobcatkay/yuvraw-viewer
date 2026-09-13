@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -43,6 +44,23 @@ namespace
     constexpr uint8_t kRgb10A2FirstRgb8B = 255;
     constexpr uint8_t kRgb10A2SecondRgb8R = 255;
     constexpr uint8_t kPaddingSentinel = 0xFF;
+    constexpr int32_t kRgbChannelCount = 3;
+    constexpr int32_t kByteMaximum = (1 << kBitsPerByte) - 1;
+    constexpr float kSourceRgbTolerance = 1e-5f;
+    constexpr int32_t kNeutralYuvWidth = 2;
+    constexpr int32_t kNeutralYuvHeight = 2;
+    constexpr int32_t kNeutralYuvLumaCount = kNeutralYuvWidth * kNeutralYuvHeight;
+    constexpr int32_t kNeutralYuvChromaCount = 2;
+    constexpr int32_t kNeutralYuvSampleCount = kNeutralYuvLumaCount + kNeutralYuvChromaCount;
+    constexpr int32_t kLimitedBlack8 = 16;
+    constexpr int32_t kLimitedWhite8 = 235;
+    constexpr int32_t kP010HighlightLuma = 800;
+    constexpr int32_t kRawMaximum = (1 << kRawEffectiveBits) - 1;
+    constexpr int32_t kConfigurableYuvBitDepths[] = { 8, 10, 12, 14, 16 };
+    constexpr float kChangedExposureStops = 2.0f;
+    constexpr float kChangedReferenceWhiteNits = 400.0f;
+    constexpr float kChangedHlgPeakNits = 2000.0f;
+    constexpr float kChangedToneMapWhite = 8.0f;
 
     // word=0xBFFAA955：R=341, G=682, B=1023, A=2。
     // 直接写字节真值，避免测试与实现复制同一个 pack 公式后一起写反位序。
@@ -63,6 +81,47 @@ namespace
         if (!bCondition)
         {
             ++gFailures;
+        }
+    }
+
+    bool RgbNear(const float Actual[kRgbChannelCount], float R, float G, float B)
+    {
+        return std::fabs(Actual[0] - R) <= kSourceRgbTolerance
+            && std::fabs(Actual[1] - G) <= kSourceRgbTolerance
+            && std::fabs(Actual[2] - B) <= kSourceRgbTolerance;
+    }
+
+    void StoreLittleEndianWord(uint8_t* Destination, int32_t Code, int32_t SampleShift)
+    {
+        const uint16_t stored = static_cast<uint16_t>(Code << SampleShift);
+        Destination[0] = static_cast<uint8_t>(stored);
+        Destination[1] = static_cast<uint8_t>(stored >> kBitsPerByte);
+    }
+
+    void MakeNeutralYuv16(
+        FImageData& Image,
+        EImageFormat Format,
+        int32_t BitDepth,
+        int32_t SampleShift,
+        int32_t LumaCode)
+    {
+        Image.SetSize(kNeutralYuvWidth, kNeutralYuvHeight);
+        Image.SetFormat(Format);
+        Image.SetStride(kNeutralYuvWidth * kRawWordBytes);
+        if (Format != EImageFormat::P010)
+        {
+            Image.SetSampleLayout(BitDepth, SampleShift);
+        }
+        Image.AllocatePixelData(kNeutralYuvSampleCount * kRawWordBytes);
+
+        // 中性色独立于矩阵的 Kr/Kb，真值只由范围还原和有效位深决定。
+        const int32_t chromaCenter = 1 << (BitDepth - 1);
+        for (int32_t index = 0; index < kNeutralYuvSampleCount; ++index)
+        {
+            StoreLittleEndianWord(
+                Image.GetPixelData() + index * kRawWordBytes,
+                index < kNeutralYuvLumaCount ? LumaCode : chromaCenter,
+                SampleShift);
         }
     }
 
@@ -172,6 +231,15 @@ namespace
                     std::to_string(x) + "," + std::to_string(y) + ")";
 
                 CheckRgb(label.c_str(), rgb, x, y, kRedLevel, kGreenLevel, kBlueLevel);
+
+                FPixelSample sample;
+                CheckCondition(
+                    (label + " source RGB").c_str(),
+                    FImageSampler::SamplePixel(image, x, y, display, Pattern, sample)
+                    && RgbNear(sample.SourceRgb,
+                               static_cast<float>(kRedLevel) / kByteMaximum,
+                               static_cast<float>(kGreenLevel) / kByteMaximum,
+                               static_cast<float>(kBlueLevel) / kByteMaximum));
             }
         }
 
@@ -292,6 +360,123 @@ namespace
             bHighSampled &&
             lowSample.Values[0] == kRawRedLevel &&
             highSample.Values[0] == kRawRedLevel);
+        CheckCondition(
+            u8"Bayer16 源 RGB 保留有效位深",
+            bLowSampled && bHighSampled
+            && std::fabs(lowSample.SourceRgb[0]
+                         - static_cast<float>(kRawRedLevel) / kRawMaximum) <= kSourceRgbTolerance
+            && RgbNear(highSample.SourceRgb,
+                       lowSample.SourceRgb[0], lowSample.SourceRgb[1], lowSample.SourceRgb[2]));
+    }
+
+    void TestP010SourceRgbBeforeDisplay()
+    {
+        FImageData image;
+        MakeNeutralYuv16(image, EImageFormat::P010,
+                         kRawEffectiveBits, kRawHighAlignmentShift, kP010HighlightLuma);
+        FDisplaySettings display;
+        display.ColorSpace = EColorSpace::BT2020;
+        display.Primaries = EColorPrimaries::BT2020;
+        display.Transfer = EColorTransfer::HLG;
+        display.ColorRange = EColorRange::Limited;
+        display.ToneMap = EToneMapOperator::Clip;
+
+        const int32_t rangeScale = 1 << (kRawEffectiveBits - kBitsPerByte);
+        const float expectedCode = static_cast<float>(kP010HighlightLuma - kLimitedBlack8 * rangeScale)
+            / ((kLimitedWhite8 - kLimitedBlack8) * rangeScale);
+        FPixelSample sample;
+        const bool bSampled = FImageSampler::SamplePixel(
+            image, 0, 0, display, EBayerPattern::RGGB, sample);
+        CheckCondition(
+            u8"P010 高位对齐返回 10bit 源码值",
+            bSampled && sample.MaxValue == kRawMaximum
+            && sample.Values[0] == kP010HighlightLuma
+            && RgbNear(sample.SourceRgb, expectedCode, expectedCode, expectedCode));
+        CheckCondition(
+            u8"HLG 高光显示裁白而源 RGB 保留",
+            bSampled && RgbNear(sample.Rgb, 1.0f, 1.0f, 1.0f)
+            && RgbNear(sample.SourceRgb, expectedCode, expectedCode, expectedCode));
+
+        for (const EColorTransfer transfer : {
+                 EColorTransfer::SDR, EColorTransfer::BT1886, EColorTransfer::Linear,
+                 EColorTransfer::PQ, EColorTransfer::HLG })
+        {
+            FDisplaySettings changed = display;
+            changed.Transfer = transfer;
+            changed.Primaries = EColorPrimaries::DisplayP3;
+            changed.ExposureStops = kChangedExposureStops;
+            changed.ReferenceWhiteNits = kChangedReferenceWhiteNits;
+            changed.HlgPeakNits = kChangedHlgPeakNits;
+            changed.ToneMap = EToneMapOperator::Reinhard;
+            changed.ToneMapWhite = kChangedToneMapWhite;
+            changed.bShowOutOfRange = true;
+            FPixelSample changedSample;
+            CheckCondition(
+                u8"显示设置变化不改变源 RGB 码值",
+                FImageSampler::SamplePixel(image, 0, 0, changed, EBayerPattern::RGGB, changedSample)
+                && RgbNear(changedSample.SourceRgb, expectedCode, expectedCode, expectedCode));
+        }
+    }
+
+    void TestConfigurableYuvSourceBitDepth()
+    {
+        FDisplaySettings display;
+        display.ColorRange = EColorRange::Full;
+        for (const int32_t bitDepth : kConfigurableYuvBitDepths)
+        {
+            const int32_t maximum = (1 << bitDepth) - 1;
+            const int32_t middleCode = 1 << (bitDepth - 1);
+            for (const int32_t shift : { 0, kRawContainerBits - bitDepth })
+            {
+                for (const int32_t lumaCode : { middleCode, maximum })
+                {
+                    FImageData image;
+                    MakeNeutralYuv16(image, EImageFormat::YUV420SP16, bitDepth, shift, lumaCode);
+                    FPixelSample sample;
+                    const float expected = static_cast<float>(lumaCode) / maximum;
+                    const std::string label = "YUV420SP16 " + std::to_string(bitDepth)
+                        + "bit shift=" + std::to_string(shift) + " code=" + std::to_string(lumaCode);
+                    CheckCondition(
+                        label.c_str(),
+                        FImageSampler::SamplePixel(image, 0, 0, display, EBayerPattern::RGGB, sample)
+                        && sample.MaxValue == maximum && sample.Values[0] == lumaCode
+                        && RgbNear(sample.SourceRgb, expected, expected, expected));
+                }
+            }
+        }
+    }
+
+    void TestRgb16SourceAlignment()
+    {
+        FImageData image;
+        image.SetSize(1, 1);
+        image.SetFormat(EImageFormat::RGB16);
+        image.SetSampleLayout(kRawEffectiveBits, kRawHighAlignmentShift);
+        image.AllocatePixelData(kRgbChannelCount * kRawWordBytes);
+        const std::array<int32_t, kRgbChannelCount> codes = {
+            kRawRedLevel, kRawGreenLevel, kRawBlueLevel
+        };
+        for (int32_t channel = 0; channel < kRgbChannelCount; ++channel)
+        {
+            StoreLittleEndianWord(image.GetPixelData() + channel * kRawWordBytes,
+                                  codes[channel], kRawHighAlignmentShift);
+        }
+
+        FPixelSample sample;
+        FDisplaySettings display;
+        const bool bSampled = FImageSampler::SamplePixel(
+            image, 0, 0, display, EBayerPattern::RGGB, sample);
+        CheckCondition(
+            u8"RGB16 高位对齐恢复有效整数读数",
+            bSampled && sample.MaxValue == kRawMaximum
+            && sample.Values[0] == kRawRedLevel && sample.Values[1] == kRawGreenLevel
+            && sample.Values[2] == kRawBlueLevel);
+        const float r = static_cast<float>(kRawRedLevel) / kRawMaximum;
+        const float g = static_cast<float>(kRawGreenLevel) / kRawMaximum;
+        const float b = static_cast<float>(kRawBlueLevel) / kRawMaximum;
+        CheckCondition(
+            u8"RGB16 源 RGB 和预览按有效位深归一化",
+            bSampled && RgbNear(sample.SourceRgb, r, g, b) && RgbNear(sample.Rgb, r, g, b));
     }
 
     void TestRgb10A2Sampling()
@@ -353,6 +538,12 @@ namespace
             first.GetComponentMaxValue(2) == kRgb10A2RgbMaximum &&
             first.GetComponentMaxValue(kAlphaChannelIndex) ==
                 kRgb10A2AlphaMaximum);
+        CheckCondition(
+            u8"RGB10_A2 源 RGB 使用 10bit 满量程",
+            bSampledFirst && RgbNear(first.SourceRgb,
+                static_cast<float>(kRgb10A2FirstR) / kRgb10A2RgbMaximum,
+                static_cast<float>(kRgb10A2FirstG) / kRgb10A2RgbMaximum,
+                static_cast<float>(kRgb10A2FirstB) / kRgb10A2RgbMaximum));
 
         FPixelSample secondRow;
         const bool bSampledSecondRow =
@@ -371,6 +562,10 @@ namespace
             secondRow.Values[2] == 0 &&
             secondRow.Values[kAlphaChannelIndex] ==
                 kRgb10A2AlphaMaximum);
+        CheckCondition(
+            u8"RGB10_A2 不同 alpha 不改变 RGB 满量程",
+            bSampledSecondRow && secondRow.MaxValue == kRgb10A2RgbMaximum
+            && RgbNear(secondRow.SourceRgb, 1.0f, 0.0f, 0.0f));
 
         std::vector<uint8_t> rgb;
         const bool bConverted =
@@ -415,6 +610,11 @@ int main()
 
     std::printf("\n=== RGB10_A2 packed 采样 ===\n");
     TestRgb10A2Sampling();
+
+    std::printf(u8"\n=== 源 RGB 码值与有效位深 ===\n");
+    TestP010SourceRgbBeforeDisplay();
+    TestConfigurableYuvSourceBitDepth();
+    TestRgb16SourceAlignment();
 
     std::printf("\n%s\n", gFailures == 0 ? "全部通过" : "存在失败");
 

@@ -151,12 +151,17 @@ namespace
     }
 
     /**
-     * 把非线性 R'G'B' 过一遍色彩管线，写进采样结果
+     * 保留源 R'G'B' 码值，再经色彩管线生成 SDR 预览与亮度读数
      */
     void FinishRgb(const FSampleContext& Ctx, float R, float G, float B, FPixelSample& OutSample)
     {
         float rgb[3] = { R, G, B };
         float nits = 0.0f;
+
+        // 直方图需要源编码分布，必须在 EOTF、映射和裁剪前保留越界分量。
+        OutSample.SourceRgb[0] = R;
+        OutSample.SourceRgb[1] = G;
+        OutSample.SourceRgb[2] = B;
 
         FColorTransform::ApplyPipeline(Ctx.Pipeline, rgb, &nits);
 
@@ -302,6 +307,7 @@ namespace
 
             for (int32_t c = 0; c < 3; ++c)
             {
+                OutSample.SourceRgb[c] = rgb[c];
                 OutSample.Rgb[c] = std::max(0.0f, std::min(1.0f, rgb[c]));
             }
 
@@ -315,10 +321,14 @@ namespace
 
             OutSample.Count = channels;
 
+            // RGB16/RGBA16 也可能通过采样布局覆盖为高位对齐的有效码值。
+            // RGB10_A2 已按 10/10/10/2 位拆包，不能再把 RGB 的对齐位数用于其独立分量。
+            const int32_t rgbSampleShift = format == EImageFormat::RGB10A2 ? 0 : sampleShift;
+
             for (int32_t c = 0; c < channels; ++c)
             {
                 OutSample.Labels[c] = kRgbLabels[c];
-                OutSample.Values[c] = plane0[c];
+                OutSample.Values[c] = plane0[c] >> rgbSampleShift;
             }
 
             if (format == EImageFormat::RGB10A2 &&
@@ -328,9 +338,9 @@ namespace
                     static_cast<int32_t>(kRgb10A2AlphaMask);
             }
 
-            const float r = (channels > 0) ? (plane0[0] / maxF) : 0.0f;
-            const float g = (channels > 1) ? (plane0[1] / maxF) : 0.0f;
-            const float b = (channels > 2) ? (plane0[2] / maxF) : 0.0f;
+            const float r = (channels > 0) ? (OutSample.Values[0] / maxF) : 0.0f;
+            const float g = (channels > 1) ? (OutSample.Values[1] / maxF) : 0.0f;
+            const float b = (channels > 2) ? (OutSample.Values[2] / maxF) : 0.0f;
 
             FinishRgb(Ctx, r, g, b, OutSample);
 
@@ -447,8 +457,8 @@ namespace FImageSampler
         FColorTransform::BuildYuvToRgb(
             Display.ColorSpace, Display.ColorRange, bitDepth, ctx.YuvMatrix, ctx.YuvOffset);
 
-        // CPU 侧的目标永远是 8bit sRGB（导出/直方图/差值/探针色块），
-        // 与屏幕是不是 HDR 无关，所以 FDisplayOutput 取默认值
+        // Rgb 固定为 SDR 预览输出（导出/差值/探针色块），因此使用默认 FDisplayOutput。
+        // 直方图另取显示色彩管线前的 SourceRgb，不依赖屏幕的 HDR 输出状态。
         ctx.Pipeline = FColorTransform::BuildPipeline(Display);
 
         return ctx;

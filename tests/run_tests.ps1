@@ -13,6 +13,7 @@
 #   - WIC 超大图片头、截断、无效文件、安全内存边界与可选 codec 枚举
 #   - 由文件大小反推分辨率（候选排序、stride 反演、跨格式提示）
 #   - 色彩管线（PQ/HLG/sRGB 传输函数、原色矩阵、色调映射、直通恒等）
+#   - RGB 码值直方图（有效位深、越界计数、完整区间聚合与窄峰保留）
 #   - 文件日志（线程安全写入、单文件大小限制、最多保留五个滚动文件）
 #   - 用户设置（窗口边界、六项基础主题色、最近打开、直方图/对比偏好、全量清理与跨进程持久化）
 #   - 旧版配置迁移（新文件优先、格式预设保留、失败重试、清除后不再导入）
@@ -136,6 +137,13 @@ $suites = @(
         Sources = @(
             (Join-Path $PSScriptRoot "TestColorPipeline.cpp")
             (Join-Path $srcDir "Image\FImageFormatDesc.cpp")
+        )
+        Libs    = ""
+    },
+    @{
+        Name    = "TestCodeHistogram"
+        Sources = @(
+            (Join-Path $PSScriptRoot "TestCodeHistogram.cpp")
         )
         Libs    = ""
     },
