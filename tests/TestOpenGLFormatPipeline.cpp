@@ -9,6 +9,7 @@
 #include "Image/FImageFormatDesc.h"
 #include "Image/FImageSampler.h"
 #include "Image/FRawImageLoader.h"
+#include "Image/FRawColorTransform.h"
 #include "gl/FShader.h"
 #include "gl/FShaderManager.h"
 #include "gl/FShaders.h"
@@ -178,6 +179,7 @@ namespace
         int32_t SourceBitDepth = 8;
         int32_t ExpectedSampleShift = 0;
         int32_t InputStride = 0;
+        FRawDisplaySettings Raw;
     };
 
     class FScopedTempFile
@@ -448,7 +450,7 @@ namespace
                     y,
                     0,
                     BaseStride,
-                    BayerValue(x, y, maximum),
+                    BayerValue(x / Desc.BayerBlockSize, y / Desc.BayerBlockSize, maximum),
                     TestCase.ExpectedSampleShift,
                     TestCase.ByteOrder);
             }
@@ -952,6 +954,33 @@ namespace
             }
         }
 
+        // 非对称矩阵及四个黑电平覆盖 RAW uniform 上传、排列解释和输出编码。
+        constexpr int32_t kRawCorrectionBitDepth = 8;
+        constexpr float kRawCorrectionWhiteLevel = 240.0f;
+        constexpr std::array<float, FRawDisplaySettings::kCfaChannelCount> kRawBlackLevels{
+            5.0f, 10.0f, 15.0f, 20.0f };
+        constexpr std::array<float, FRawDisplaySettings::kRgbChannelCount> kRawGains{
+            1.1f, 1.0f, 1.3f };
+        constexpr std::array<float, FRawDisplaySettings::kMatrixElementCount> kRawMatrix{
+            1.1f, -0.1f, 0.0f, 0.05f, 0.9f, 0.05f, 0.0f, -0.1f, 1.1f };
+        for (EImageFormat format : { EImageFormat::Bayer8, EImageFormat::QuadBayer8 })
+        {
+            for (ERawCcmLayout layout : { ERawCcmLayout::RowMajor, ERawCcmLayout::ColumnMajor })
+            {
+                FRenderCase corrected;
+                corrected.Format = format;
+                corrected.Suffix = layout == ERawCcmLayout::RowMajor ? "raw_correction_row" : "raw_correction_column";
+                corrected.SourceBitDepth = kRawCorrectionBitDepth;
+                corrected.Raw.bEnabled = true;
+                corrected.Raw.BlackLevel = kRawBlackLevels;
+                corrected.Raw.WhiteLevel = kRawCorrectionWhiteLevel;
+                corrected.Raw.WhiteBalance = kRawGains;
+                corrected.Raw.Ccm = kRawMatrix;
+                corrected.Raw.CcmLayout = layout;
+                corrected.Raw.bEncodeSrgb = layout == ERawCcmLayout::RowMajor;
+                cases.push_back(corrected);
+            }
+        }
         return cases;
     }
 
@@ -1515,6 +1544,14 @@ namespace
 
         if (desc.ColorModel == EColorModel::Bayer)
         {
+            const auto raw = FRawColorTransform::Build(Display.Raw, MaximumForBits(Image.GetSourceBitDepth()));
+            Shader.SetInt("uRawEnabled", raw.bEnabled ? 1 : 0);
+            Shader.SetInt("uRawEncodeSrgb", raw.bEncodeSrgb ? 1 : 0);
+            Shader.SetVec4("uRawBlackLevel", raw.BlackLevel[0], raw.BlackLevel[1], raw.BlackLevel[2], raw.BlackLevel[3]);
+            Shader.SetVec4("uRawScale", raw.Scale[0], raw.Scale[1], raw.Scale[2], raw.Scale[3]);
+            Shader.SetVec3("uRawWhiteBalance", raw.WhiteBalance[0], raw.WhiteBalance[1], raw.WhiteBalance[2]);
+            Shader.SetMat3("uRawCcm", raw.Matrix.data());
+            Shader.SetInt("uBayerBlockSize", desc.BayerBlockSize);
             Shader.SetInt(
                 "uBayerPattern",
                 static_cast<int32_t>(
@@ -1759,6 +1796,7 @@ namespace
         FDisplaySettings display;
         display.ColorRange =
             EColorRange::Full;
+        display.Raw = TestCase.Raw;
         std::vector<uint8_t> cpuRgb;
 
         if (!FImageSampler::ConvertToRgb8(

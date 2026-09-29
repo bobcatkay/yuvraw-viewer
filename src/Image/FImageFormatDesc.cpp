@@ -11,6 +11,11 @@ namespace
     constexpr size_t kBitsPerByte = 8u;
     constexpr int32_t kMinimumYuv420Sp16BitDepth = 8;
     constexpr int32_t kMaximumWordBitDepth = 16;
+    constexpr int32_t kQuadBayerBlockSize = 2;
+    constexpr int32_t kQuadBayer8BitDepth = 8;
+    constexpr int32_t kQuadBayer10BitDepth = 10;
+    constexpr int32_t kQuadBayer12BitDepth = 12;
+    constexpr int32_t kQuadBayer14BitDepth = 14;
 
     /**
      * 构造一个平面描述的简写
@@ -110,13 +115,17 @@ namespace
                 int32_t BitsPerPixelPacked = 0,
                 int32_t SampleShift = 0,
                 FStorageLayoutDesc StorageLayout = {},
-                FEffectiveBitDepthDesc EffectiveBitDepth = {})
+                FEffectiveBitDepthDesc EffectiveBitDepth = {},
+                int32_t BayerBlockSize = 1)
             {
                 FFormatDesc d;
                 d.Format = Format;
+                d.DisplayFormat = ColorModel == EColorModel::Bayer && !bIsPacked ?
+                    (BayerBlockSize == kQuadBayerBlockSize ? EImageFormat::QuadBayer10 : EImageFormat::Bayer10) : Format;
                 d.Name = Name;
                 d.DisplayName = DisplayName;
                 d.ColorModel = ColorModel;
+                d.BayerBlockSize = BayerBlockSize;
                 d.BitDepth = BitDepth;
                 d.PlaneCount = static_cast<int32_t>(Planes.size());
                 d.bSwapChroma = bSwapChroma;
@@ -172,7 +181,7 @@ namespace
             Add(EImageFormat::BayerPacked12, "BayerPacked12", u8"Bayer MIPI RAW12", EColorModel::Bayer, 12, { FullY8 }, false, /*bIsPacked=*/true, /*BitsPerPixelPacked=*/12);
 
             // --- Android Bayer RAW 扩展（顺序与追加的枚举严格对应）---
-            Add(EImageFormat::Bayer10,        "Bayer10",        u8"Bayer 10bit (16bit 容器)", EColorModel::Bayer, 10, { FullY16 }, false, false, 0, 0, ConfigurableByteOrder());
+            Add(EImageFormat::Bayer10,        "Bayer10",        "Bayer Raw", EColorModel::Bayer, 10, { FullY16 }, false, false, 0, 0, ConfigurableByteOrder());
             Add(EImageFormat::Bayer12,        "Bayer12",        u8"Bayer 12bit (16bit 容器)", EColorModel::Bayer, 12, { FullY16 }, false, false, 0, 0, ConfigurableByteOrder());
             Add(EImageFormat::Bayer14,        "Bayer14",        u8"Bayer 14bit (16bit 容器)", EColorModel::Bayer, 14, { FullY16 }, false, false, 0, 0, ConfigurableByteOrder());
             Add(EImageFormat::BayerPacked14, "BayerPacked14", u8"Android RAW14 (packed)", EColorModel::Bayer, 14, { FullY8 }, false, /*bIsPacked=*/true, /*BitsPerPixelPacked=*/14);
@@ -185,6 +194,13 @@ namespace
             // 描述相机 dump 中常见的 10/12/14bit 低位或高位对齐变体。
             Add(EImageFormat::YUV420SP16,     "YUV420SP16",    u8"YUV420SP 16bit", EColorModel::YUV, kMaximumWordBitDepth, { FullY16, UV420_16 }, false, false, 0, 0, ConfigurableWordLayout(), ConfigurableBitDepth(kMinimumYuv420Sp16BitDepth, kMaximumWordBitDepth));
 
+            // Quad Bayer 保留原始平面和尺寸；CPU/GPU 由同色块边长选择 CFA 相位与邻域步长。
+            Add(EImageFormat::QuadBayer8,  "QuadBayer8",  u8"Quad Bayer 8bit", EColorModel::Bayer, kQuadBayer8BitDepth, { FullY8 }, false, false, 0, 0, {}, {}, kQuadBayerBlockSize);
+            Add(EImageFormat::QuadBayer10, "QuadBayer10", "Quad Bayer Raw", EColorModel::Bayer, kQuadBayer10BitDepth, { FullY16 }, false, false, 0, 0, ConfigurableByteOrder(), {}, kQuadBayerBlockSize);
+            Add(EImageFormat::QuadBayer12, "QuadBayer12", u8"Quad Bayer 12bit (16bit 容器)", EColorModel::Bayer, kQuadBayer12BitDepth, { FullY16 }, false, false, 0, 0, ConfigurableByteOrder(), {}, kQuadBayerBlockSize);
+            Add(EImageFormat::QuadBayer14, "QuadBayer14", u8"Quad Bayer 14bit (16bit 容器)", EColorModel::Bayer, kQuadBayer14BitDepth, { FullY16 }, false, false, 0, 0, ConfigurableByteOrder(), {}, kQuadBayerBlockSize);
+            Add(EImageFormat::QuadBayer16, "QuadBayer16", u8"Quad Bayer 16bit", EColorModel::Bayer, kMaximumWordBitDepth, { FullY16 }, false, false, 0, 0, ConfigurableWordLayout(), ConfigurableBitDepth(FImageLimits::kMinimumRawBitsPerSample, FImageLimits::kMaximumRawBitsPerSample), kQuadBayerBlockSize);
+
             return t;
         }();
 
@@ -195,7 +211,8 @@ namespace
      * 构造面向用户的格式顺序，不改动枚举/描述表的追加顺序。
      *
      * RGB 格式按位深稳定排序，使后追加的 packed RGB 仍与 RGB8/RGB16 放在一起；
-     * 非 RGB 格式通常保留描述表中的相对顺序；追加的 YUV420SP16 在 UI 中紧跟 P010，
+     * 未打包 Bayer/Quad Bayer 的位深变体共用入口；其它非 RGB 格式保留表中相对顺序。
+     * 追加的 YUV420SP16 在 UI 中紧跟 P010，
      * 让相同平面布局的两种格式相邻，同时不改变持久化枚举值。
      */
     const std::vector<EImageFormat>& BuildDisplayOrder()
@@ -210,7 +227,8 @@ namespace
 
             for (const FFormatDesc& desc : table)
             {
-                if (desc.Format == EImageFormat::Unknown)
+                // 位深变体保留加载/缓存标识，只在 UI 中合并为一个默认 10bit 的入口。
+                if (desc.Format == EImageFormat::Unknown || desc.Format != desc.DisplayFormat)
                 {
                     continue;
                 }
@@ -289,6 +307,21 @@ namespace FImageFormatDesc
         return BuildDisplayOrder();
     }
 
+    EImageFormat ResolveBayerBitDepthFormat(EImageFormat Format, int32_t BitDepth)
+    {
+        const FFormatDesc& source = Get(Format);
+        if (source.ColorModel != EColorModel::Bayer || source.bIsPacked) { return EImageFormat::Unknown; }
+        for (const FFormatDesc& candidate : GetAll())
+        {
+            if (candidate.ColorModel == EColorModel::Bayer && !candidate.bIsPacked &&
+                candidate.BayerBlockSize == source.BayerBlockSize && candidate.BitDepth == BitDepth)
+            {
+                return candidate.Format;
+            }
+        }
+        return EImageFormat::Unknown;
+    }
+
     const FFormatDesc& Get(EImageFormat Format)
     {
         const std::vector<FFormatDesc>& table = BuildTable();
@@ -334,6 +367,14 @@ namespace FImageFormatDesc
         };
 
         static constexpr FFormatAlias Aliases[] = {
+            { "bayerraw",     EImageFormat::Bayer10 },
+            { "bayer_raw",    EImageFormat::Bayer10 },
+            { "bayer raw",    EImageFormat::Bayer10 },
+            { "quadbayerraw", EImageFormat::QuadBayer10 },
+            { "quad_bayer_raw", EImageFormat::QuadBayer10 },
+            { "quad bayer raw", EImageFormat::QuadBayer10 },
+            { "quadbayer",   EImageFormat::QuadBayer10 },
+            { "quad_bayer",  EImageFormat::QuadBayer10 },
             { "raw_sensor",  EImageFormat::Bayer16 },
             { "rawsensor",   EImageFormat::Bayer16 },
             { "raw16",       EImageFormat::Bayer16 },

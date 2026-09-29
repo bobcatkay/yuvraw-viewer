@@ -111,6 +111,8 @@ bool FImageDocument::Reload()
 
 bool FImageDocument::CommitLoadResult(FImageLoadResult&& Result)
 {
+    const bool bKeepRaw = Result.bPreserveRawSettings ||
+        (FilePath == Result.FilePath && Display.Raw.bConfigured);
     FilePath = std::move(Result.FilePath);
     Params = Result.Params;
     FileSize = Result.FileSize;
@@ -123,6 +125,11 @@ bool FImageDocument::CommitLoadResult(FImageLoadResult&& Result)
 
     if (bPrepared)
     {
+        if (!bKeepRaw)
+        {
+            // 新文件只使用自己的 TXT，缺失时退回恒等预览，不能继承上一帧的白平衡。
+            Display.Raw = Result.RawDisplay.value_or(FRawDisplaySettings{});
+        }
         // CPU 与 GPU 两份资源在主线程同一临界点替换；渲染回调在本帧稍后看到的
         // 要么全是旧资源，要么全是新资源，不会出现路径/像素/纹理跨代混搭。
         ImageData = std::move(Result.ImageData);

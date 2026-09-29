@@ -61,8 +61,13 @@ YCbCr --BuildYuvToRgb--> R'G'B'(非线性)
 批量采样（直方图 25 万点、导出整幅图）**一定要先 `FImageSampler::MakeContext()` 再复用**，
 逐点重建矩阵会把只需算一次的事变成实打实的卡顿。
 
-Bayer **刻意不接管线**：CFA 是传感器线性读数，上面既没有 gamma 也没有 PQ，
-套一层 EOTF 只会得到没有物理含义的结果。
+Bayer 不走上述 RGB/YUV 输入 EOTF，使用 `FRawColorTransform` 的独立 RAW 显示链路：
+逐 CFA 位置扣黑电平、按白电平归一化 → 双线性去马赛克 → R/G/B 白平衡 → CCM → 可选 sRGB 输出编码。
+默认校正关闭，黑电平为 0、增益为 1、矩阵为单位矩阵；配套 TXT 成功导入时启用。
+CCM 默认按行排列，输入为白平衡后的相机 RGB、输出为线性 sRGB；用户可选列排列及 XYZ D65 输出。
+XYZ D65 通过现有 sRGB 原色矩阵转换到线性 sRGB，不推测其它白点的色适配。
+CPU 探针/导出和 GPU 预览共用展开后的列主序矩阵；Bayer 直方图 `SourceRgb` 保留校正后的线性值，
+未做输出编码或上限裁剪，原始 CFA 探针整数读数不变。关闭校正恢复原始插值预览。
 
 ## HDR 输出（方案 A）
 

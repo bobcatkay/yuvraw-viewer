@@ -175,7 +175,18 @@ padding 只在下拉框底部用一句话提示（"右侧有绿色竖条就把�
 ## 扩展名与工厂分发
 
 - `.yuv` 扩展名不能决定格式，必须由用户/文件名/命令行指定。
+- `.raw` / `.RAW` 的文件名未命中格式规则时默认 Bayer10（16bit 容器）；扩展名本身不作为 RAW 格式标识，文件名中的显式格式仍优先。
+- `QuadBayer8/10/12/14/16` 及用分隔符拆开的名称可在文件名中识别；`QuadBayer` 简写默认 10bit，匹配优先于普通 Bayer。
 - `FImageLoaderFactory` 按 `SupportsFormat(EImageFormat)` **显式查询**分发（用户指定了格式时），否则才按扩展名。`FWicImageLoader::SupportsFormat(EImageFormat)` 恒为 false，保证用户选了 NV21 时不会被它截走。
+
+## Bayer 配套元数据
+
+Bayer 解码成功后在加载线程读取 `FRawMetadata` 配套 TXT：先找图像目录中的同名 `.txt`，
+缺失时去掉文件名末尾的数字帧编号后再查找。只读取匹配帧的位深、黑电平、
+白平衡增益和 CCM，位深不符、字段缺失、非有限值或文件超过 1 MiB 时不应用。
+Bayer 排布由用户选择，镜头阴影校正表不自动应用。缺失 TXT 保留原始预览。
+属性面板保留手动 TXT 文件选择与帧编号输入；导入失败不覆盖现有参数。
+导入的显示设置随 `FImageLoadResult` 在主线程与像素一起提交，不在逐帧路径扫描目录。
 
 ## 按需关联
 

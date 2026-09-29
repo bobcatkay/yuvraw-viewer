@@ -10,6 +10,7 @@
 #include "Image/FImageLimits.h"
 #include "Image/FImageLoadParams.h"
 #include "Image/FRawImageLoader.h"
+#include "Image/FRawMetadata.h"
 #include "PublicFixtures.h"
 
 #include <cmath>
@@ -32,6 +33,15 @@ namespace
     constexpr float kScaleTolerance = 0.0001f;
     constexpr uintmax_t kTestLogLimitBytes = 1024u * 1024u;
     constexpr size_t kTestLogFileCount = 1u;
+    constexpr int32_t kMetadataBitDepth = 10;
+    constexpr int32_t kMismatchedMetadataBitDepth = 12;
+    constexpr float kMetadataBlackLevel = 16.0f;
+    constexpr float kMetadataRedGain = 1.5f;
+    constexpr float kMetadataBlueGain = 2.0f;
+    constexpr const char* kMetadataFrame =
+        "[InputFrameIndex: 1]\nimageBitDepth: 10\n"
+        "blackLevel[0]: 16\nblackLevel[1]: 17\nblackLevel[2]: 18\nblackLevel[3]: 19\n"
+        "redGain: 1.5\nblueGain: 2\nCCM: 1,0,0,0,1,0,0,0,1\n";
 
     int gFailures = 0;
 
@@ -77,6 +87,44 @@ namespace
         std::filesystem::path Path;
         bool bWritten = false;
     };
+
+    void TestRawMetadata()
+    {
+        // 程序生成两帧配套 TXT，验证文件发现、帧隔离及失败时保留用户参数。
+        const std::string metadata = std::string(kMetadataFrame) +
+            "[InputFrameIndex: 2]\nredGain: 3\n";
+        FScopedTempFile companion("YUVRaw_Metadata.txt", { metadata.begin(), metadata.end() });
+        const std::string rawPath = (std::filesystem::temp_directory_path() /
+            "YUVRaw_Metadata_01.raw").u8string();
+        FRawDisplaySettings settings;
+        settings.CcmLayout = ERawCcmLayout::ColumnMajor;
+        settings.CcmOutput = ERawCcmOutput::XyzD65;
+        Check("synthetic metadata fixture written", companion.IsWritten());
+        Check("automatic companion lookup selects frame suffix",
+            FRawMetadata::LoadForRawFile(rawPath, kMetadataBitDepth, settings) == ERawMetadataResult::Success);
+        Check("metadata imports black levels, WB and CCM without next-frame overwrite",
+            settings.BlackLevel[0] == kMetadataBlackLevel && settings.BlackLevel[3] == kMetadataBlackLevel + 3 &&
+            settings.WhiteBalance[0] == kMetadataRedGain && settings.WhiteBalance[1] == 1.0f &&
+            settings.WhiteBalance[2] == kMetadataBlueGain && settings.Ccm[0] == 1.0f &&
+            settings.Ccm[1] == 0.0f && settings.Ccm[8] == 1.0f && settings.bEnabled && !settings.bConfigured);
+        Check("metadata retains selected CCM interpretation",
+            settings.CcmLayout == ERawCcmLayout::ColumnMajor && settings.CcmOutput == ERawCcmOutput::XyzD65);
+        const auto imported = settings;
+        Check("metadata rejects bit-depth mismatch",
+            FRawMetadata::LoadFile(companion.String(), 1, kMismatchedMetadataBitDepth, settings) ==
+                ERawMetadataResult::BitDepthMismatch);
+        Check("metadata rejects missing and incomplete frames",
+            FRawMetadata::LoadFile(companion.String(), 0, kMetadataBitDepth, settings) == ERawMetadataResult::FrameNotFound &&
+            FRawMetadata::LoadFile(companion.String(), 2, kMetadataBitDepth, settings) == ERawMetadataResult::BitDepthMismatch);
+        const std::string malformed = std::string(kMetadataFrame) + "redGain: invalid\n";
+        FScopedTempFile exactCompanion("YUVRaw_Metadata_01.txt", { malformed.begin(), malformed.end() });
+        Check("invalid exact companion is rejected before fallback",
+            FRawMetadata::LoadForRawFile(rawPath, kMetadataBitDepth, settings) == ERawMetadataResult::Invalid);
+        Check("failed metadata imports leave settings intact",
+            settings.BlackLevel == imported.BlackLevel && settings.WhiteBalance == imported.WhiteBalance &&
+            settings.Ccm == imported.Ccm && settings.CcmLayout == imported.CcmLayout &&
+            settings.CcmOutput == imported.CcmOutput && settings.bEnabled == imported.bEnabled);
+    }
 
     uint16_t ReadPixel(const FImageData& Image, int32_t X, int32_t Y)
     {
@@ -888,6 +936,7 @@ int main()
     std::printf("\n=== RAW 尺寸与内存边界 ===\n");
     TestResourceLimits();
     TestPublicSyntheticFixtures();
+    TestRawMetadata();
 
     FLogger::Shutdown();
     std::filesystem::remove(logDirectory / "YUVRaw.log", ec);

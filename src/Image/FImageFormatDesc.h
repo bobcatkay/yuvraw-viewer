@@ -85,9 +85,11 @@ struct FSampleAlignmentPropertyState
 struct FFormatDesc
 {
     EImageFormat Format = EImageFormat::Unknown;
+    EImageFormat DisplayFormat = EImageFormat::Unknown; ///< 位深变体共用的下拉框入口，持久化仍使用 Format
     const char*  Name = "Unknown";          ///< 稳定的 ASCII 标识，用于文件名解析与持久化
     const char*  DisplayName = "Unknown";   ///< UI 显示名（可含中文）
     EColorModel  ColorModel = EColorModel::RGB;
+    int32_t      BayerBlockSize = 1;        ///< 普通 Bayer 为单像素，Quad Bayer 为 2x2 同色块
     int32_t      BitDepth = 8;              ///< 有效位深，用于 limited range 换算
     int32_t      PlaneCount = 1;
     FPlaneDesc   Planes[3];
@@ -132,10 +134,13 @@ namespace FImageFormatDesc
     /**
      * 用户可见格式列表顺序。
      *
-     * Unknown 固定在首项，RGB 格式按位深排在一起，其余格式保持枚举相对顺序。
+     * Unknown 固定在首项，RGB 按位深分组；未打包 Bayer/Quad Bayer 各提供一个 10bit 入口。
      * 该顺序与枚举值解耦，不能用作持久化或 Get() 下标。
      */
     const std::vector<EImageFormat>& GetDisplayOrder();
+
+    /** 在未打包 Bayer 家族内选择位深对应的存储格式，其他格式返回 Unknown。 */
+    EImageFormat ResolveBayerBitDepthFormat(EImageFormat Format, int32_t BitDepth);
 
     /**
      * 按 ASCII 名查找（大小写不敏感），找不到返回 Unknown

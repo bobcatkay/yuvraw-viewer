@@ -1233,6 +1233,8 @@ void FMainDockSpace::CompleteImageLoad(FImageLoadResult Result)
         ApplyDocumentConfiguration(
             target,
             &pending.AttemptConfigurations[static_cast<size_t>(configurationIndex)]);
+        Result.bPreserveRawSettings = pending.bCacheHit && configurationIndex == 0 &&
+            target->GetDisplaySettings().Raw.bConfigured;
     }
 
     const bool bPrepared =

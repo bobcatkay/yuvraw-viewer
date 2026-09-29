@@ -1,5 +1,6 @@
 // CPU 像素转换的离线真值测试。不依赖 OpenGL / ImGui。
 #include "Image/FImageData.h"
+#include "Image/FImageFormatDesc.h"
 #include "Image/FImageSampler.h"
 
 #include <algorithm>
@@ -16,6 +17,22 @@ namespace
     constexpr uint8_t kRedLevel = 100;
     constexpr uint8_t kGreenLevel = 40;
     constexpr uint8_t kBlueLevel = 10;
+    constexpr int32_t kQuadTestDimension = 12;
+    constexpr int32_t kQuadPeriod = 4;
+    constexpr int32_t kQuadChannelCount = 3;
+    constexpr int32_t kQuadPaddingBytes = 6;
+    constexpr float kQuadRedGain = 1.5f;
+    constexpr float kQuadEdgeBlue = 50.5f;
+    constexpr std::array<float, kQuadPeriod> kQuadBlackLevels{ 5.0f, 10.0f, 20.0f, 30.0f };
+    constexpr std::array<int32_t, kQuadPeriod> kQuadPhaseOffsets{ 0, 1, 2, 3 };
+    constexpr std::array<int32_t, kQuadChannelCount> kQuadChannelLevels{ kRedLevel, kGreenLevel, kBlueLevel };
+    // 独立列出四种 4x4 CFA 真值，不调用生产代码的相位计算生成测试输入。
+    constexpr std::array<std::array<int32_t, kQuadPeriod * kQuadPeriod>, kQuadPeriod> kQuadChannelMaps{{
+        {{ 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 2, 2, 1, 1, 2, 2 }},
+        {{ 2, 2, 1, 1, 2, 2, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0 }},
+        {{ 1, 1, 0, 0, 1, 1, 0, 0, 2, 2, 1, 1, 2, 2, 1, 1 }},
+        {{ 1, 1, 2, 2, 1, 1, 2, 2, 0, 0, 1, 1, 0, 0, 1, 1 }},
+    }};
     constexpr uint8_t kBoundaryGreen = 70;
     constexpr uint8_t kBoundaryBlue = 48;
     constexpr int32_t kBitsPerByte = 8;
@@ -255,6 +272,97 @@ namespace
                 kBoundaryGreen,
                 kBoundaryBlue);
         }
+    }
+
+    void MakeQuadBayer(FImageData& Image, EImageFormat Format, EBayerPattern Pattern)
+    {
+        Image.SetSize(kQuadTestDimension, kQuadTestDimension);
+        Image.SetFormat(Format);
+        const int32_t bytesPerPixel = FImageFormatDesc::GetPlane0BytesPerPixel(Format);
+        const int32_t stride = kQuadTestDimension * bytesPerPixel + kQuadPaddingBytes;
+        Image.SetStride(stride);
+        Image.AllocatePixelData(static_cast<size_t>(stride) * kQuadTestDimension);
+        std::fill_n(Image.GetPixelData(), Image.GetPixelDataSize(), kPaddingSentinel);
+        const auto& channels = kQuadChannelMaps[static_cast<size_t>(Pattern)];
+        for (int32_t y = 0; y < kQuadTestDimension; ++y)
+        {
+            for (int32_t x = 0; x < kQuadTestDimension; ++x)
+            {
+                const int32_t channel = channels[(y % kQuadPeriod) * kQuadPeriod + x % kQuadPeriod];
+                const int32_t offset = kQuadPhaseOffsets[(y & 1) * 2 + (x & 1)];
+                const int32_t code = kQuadChannelLevels[channel] + offset;
+                uint8_t* destination = Image.GetPixelData() + static_cast<size_t>(y) * stride + x * bytesPerPixel;
+                if (bytesPerPixel == 1) { *destination = static_cast<uint8_t>(code); }
+                else { StoreLittleEndianWord(destination, code, 0); }
+            }
+        }
+    }
+
+    void TestQuadBayer()
+    {
+        const EImageFormat formats[] = {
+            EImageFormat::QuadBayer8, EImageFormat::QuadBayer10, EImageFormat::QuadBayer12,
+            EImageFormat::QuadBayer14, EImageFormat::QuadBayer16 };
+        const EBayerPattern patterns[] = {
+            EBayerPattern::RGGB, EBayerPattern::BGGR, EBayerPattern::GRBG, EBayerPattern::GBRG };
+        FDisplaySettings display;
+        for (EImageFormat format : formats)
+        {
+            for (EBayerPattern pattern : patterns)
+            {
+                FImageData image;
+                MakeQuadBayer(image, format, pattern);
+                const float maximum = static_cast<float>((1 << image.GetSourceBitDepth()) - 1);
+                bool bCorrect = true;
+                for (int32_t y = kQuadPeriod; y < kQuadPeriod * 2; ++y)
+                {
+                    for (int32_t x = kQuadPeriod; x < kQuadPeriod * 2; ++x)
+                    {
+                        FPixelSample sample;
+                        const int32_t offset = kQuadPhaseOffsets[(y & 1) * 2 + (x & 1)];
+                        const int32_t channel = kQuadChannelMaps[static_cast<size_t>(pattern)]
+                            [(y % kQuadPeriod) * kQuadPeriod + x % kQuadPeriod];
+                        const char* labels[] = { "R", "G", "B" };
+                        bCorrect &= FImageSampler::SamplePixel(image, x, y, display, pattern, sample)
+                            && RgbNear(sample.SourceRgb, (kRedLevel + offset) / maximum,
+                                (kGreenLevel + offset) / maximum, (kBlueLevel + offset) / maximum)
+                            && sample.Count == 1 && sample.Values[0] == kQuadChannelLevels[channel] + offset
+                            && std::string(sample.Labels[0]) == labels[channel];
+                    }
+                }
+                const std::string label = std::string(FImageFormatDesc::Get(format).Name) +
+                    " pattern " + std::to_string(static_cast<int32_t>(pattern));
+                CheckCondition((label + " 四个块内位置与 RAW 读数").c_str(), bCorrect);
+                std::vector<uint8_t> rgb;
+                CheckCondition((label + " 导出保持原始尺寸").c_str(),
+                    FImageSampler::ConvertToRgb8(image, display, pattern, rgb) &&
+                    rgb.size() == static_cast<size_t>(kQuadTestDimension) * kQuadTestDimension * kRgbChannelCount);
+            }
+        }
+
+        FImageData image;
+        MakeQuadBayer(image, EImageFormat::QuadBayer8, EBayerPattern::RGGB);
+        FPixelSample edge;
+        const int32_t phaseOffset = kQuadPhaseOffsets.back();
+        CheckCondition("Quad Bayer 边界保留块内位置",
+            FImageSampler::SamplePixel(image, 1, 1, display, EBayerPattern::RGGB, edge) &&
+            RgbNear(edge.SourceRgb, static_cast<float>(kRedLevel + phaseOffset) / kByteMaximum,
+                static_cast<float>(kBoundaryGreen + phaseOffset) / kByteMaximum, kQuadEdgeBlue / kByteMaximum));
+
+        // 四个不同黑电平必须按颜色块应用，不能误按原始像素的奇偶位置索引。
+        display.Raw.bEnabled = true;
+        display.Raw.bEncodeSrgb = false;
+        display.Raw.BlackLevel = kQuadBlackLevels;
+        display.Raw.WhiteBalance[0] = kQuadRedGain;
+        FPixelSample corrected;
+        const float red = (kRedLevel + phaseOffset - kQuadBlackLevels[0]) /
+            (kByteMaximum - kQuadBlackLevels[0]) * kQuadRedGain;
+        const float green = ((kGreenLevel + phaseOffset - kQuadBlackLevels[1]) /
+            (kByteMaximum - kQuadBlackLevels[1]) + (kGreenLevel + phaseOffset - kQuadBlackLevels[2]) /
+            (kByteMaximum - kQuadBlackLevels[2])) / 2.0f;
+        CheckCondition("Quad Bayer 分块黑电平与白平衡",
+            FImageSampler::SamplePixel(image, kQuadPeriod + 1, kQuadPeriod + 1,
+                display, EBayerPattern::RGGB, corrected) && RgbNear(corrected.SourceRgb, red, green, 0.0f));
     }
 
     void MakeEquivalentBayer16(
@@ -606,6 +714,7 @@ int main()
     TestPattern(EBayerPattern::BGGR, "BGGR");
     TestPattern(EBayerPattern::GRBG, "GRBG");
     TestPattern(EBayerPattern::GBRG, "GBRG");
+    TestQuadBayer();
     TestBayer16AlignmentEquivalence();
 
     std::printf("\n=== RGB10_A2 packed 采样 ===\n");

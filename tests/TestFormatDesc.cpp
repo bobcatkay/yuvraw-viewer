@@ -13,12 +13,15 @@ static int gFailures = 0;
 
 namespace
 {
-    constexpr size_t kExpectedFormatCount = 29;
+    constexpr size_t kExpectedFormatCount = 34;
+    constexpr size_t kHiddenBayerVariantCount = 8;
+    constexpr size_t kExpectedDisplayFormatCount = kExpectedFormatCount - kHiddenBayerVariantCount;
     constexpr int32_t kRgb10A2EnumValue = 27;
     constexpr int32_t kYuv420Sp16EnumValue = 28;
     constexpr int32_t kRgb10A2BytesPerPixel = 4;
     constexpr int32_t kRgb10A2PaddingBytes = 8;
     constexpr int32_t kTenBitSourceDepth = 10;
+    constexpr int32_t kEightBitSourceDepth = 8;
     constexpr int32_t kMinimumYuv420Sp16BitDepth = 8;
     constexpr int32_t kFullContainerBitDepth = 16;
     constexpr int32_t kTenBitHighAlignmentShift =
@@ -75,6 +78,11 @@ namespace
             { EImageFormat::BayerPacked14, EFormatPropertyMode::NotApplicable, EByteOrder::LittleEndian, EFormatPropertyMode::NotApplicable, ESampleAlignment::LeastSignificantBits },
             { EImageFormat::RGB10A2,       EFormatPropertyMode::Fixed,         EByteOrder::LittleEndian, EFormatPropertyMode::NotApplicable, ESampleAlignment::LeastSignificantBits },
             { EImageFormat::YUV420SP16,    EFormatPropertyMode::Configurable,  EByteOrder::LittleEndian, EFormatPropertyMode::Configurable,  ESampleAlignment::LeastSignificantBits },
+            { EImageFormat::QuadBayer8,    EFormatPropertyMode::NotApplicable, EByteOrder::LittleEndian, EFormatPropertyMode::NotApplicable, ESampleAlignment::LeastSignificantBits },
+            { EImageFormat::QuadBayer10,   EFormatPropertyMode::Configurable,  EByteOrder::LittleEndian, EFormatPropertyMode::Fixed,         ESampleAlignment::LeastSignificantBits },
+            { EImageFormat::QuadBayer12,   EFormatPropertyMode::Configurable,  EByteOrder::LittleEndian, EFormatPropertyMode::Fixed,         ESampleAlignment::LeastSignificantBits },
+            { EImageFormat::QuadBayer14,   EFormatPropertyMode::Configurable,  EByteOrder::LittleEndian, EFormatPropertyMode::Fixed,         ESampleAlignment::LeastSignificantBits },
+            { EImageFormat::QuadBayer16,   EFormatPropertyMode::Configurable,  EByteOrder::LittleEndian, EFormatPropertyMode::Configurable,  ESampleAlignment::LeastSignificantBits },
         }};
 }
 
@@ -385,11 +393,11 @@ static void CheckFormatDisplayOrder()
     const std::vector<EImageFormat>& displayOrder =
         FImageFormatDesc::GetDisplayOrder();
     Check(
-        "显示顺序覆盖全部格式",
+        "显示列表合并 Bayer 位深变体",
         static_cast<long long>(displayOrder.size()),
-        static_cast<long long>(kExpectedFormatCount));
+        static_cast<long long>(kExpectedDisplayFormatCount));
 
-    if (displayOrder.size() != kExpectedFormatCount)
+    if (displayOrder.size() != kExpectedDisplayFormatCount)
     {
         return;
     }
@@ -415,12 +423,20 @@ static void CheckFormatDisplayOrder()
         seen[index] = true;
     }
 
-    bAllFormatsValidAndUnique =
-        bAllFormatsValidAndUnique &&
-        std::all_of(
-            seen.begin(),
-            seen.end(),
-            [](bool bSeen) { return bSeen; });
+    for (const FFormatDesc& desc : FImageFormatDesc::GetAll())
+    {
+        const bool bShouldBeVisible = desc.Format == desc.DisplayFormat;
+        bAllFormatsValidAndUnique &= seen[static_cast<size_t>(desc.Format)] == bShouldBeVisible;
+        const EImageFormat visibleFormat = desc.DisplayFormat;
+        if (desc.ColorModel == EColorModel::Bayer && !desc.bIsPacked)
+        {
+            Check((std::string(desc.Name) + " UI 默认 10bit").c_str(),
+                FImageFormatDesc::Get(visibleFormat).BitDepth, kTenBitSourceDepth);
+            Check((std::string(desc.Name) + " 位深选择保留存储格式").c_str(),
+                static_cast<long long>(FImageFormatDesc::ResolveBayerBitDepthFormat(desc.Format, desc.BitDepth)),
+                static_cast<long long>(desc.Format));
+        }
+    }
     Check(
         "显示顺序无遗漏或重复",
         bAllFormatsValidAndUnique ? 1 : 0,
@@ -453,6 +469,16 @@ static void CheckFormatDisplayOrder()
         "YUV420SP16 在 UI 中紧跟 P010",
         bYuv420Sp16FollowsP010 ? 1 : 0,
         1);
+    Check("Bayer Raw 显示名", std::string(FImageFormatDesc::Get(EImageFormat::Bayer10).DisplayName) == "Bayer Raw", 1);
+    Check("Quad Bayer Raw 显示名", std::string(FImageFormatDesc::Get(EImageFormat::QuadBayer10).DisplayName) == "Quad Bayer Raw", 1);
+    Check("Quad Bayer8 使用 8bit 采样",
+        FImageFormatDesc::Get(EImageFormat::QuadBayer8).BitDepth, kEightBitSourceDepth);
+    Check("Quad Bayer Raw 可切换为 8bit",
+        static_cast<long long>(FImageFormatDesc::ResolveBayerBitDepthFormat(EImageFormat::QuadBayer10, kEightBitSourceDepth)),
+        static_cast<long long>(EImageFormat::QuadBayer8));
+    Check("RAW10 packed 不参与位深合并",
+        static_cast<long long>(FImageFormatDesc::ResolveBayerBitDepthFormat(EImageFormat::BayerPacked10, kTenBitSourceDepth)),
+        static_cast<long long>(EImageFormat::Unknown));
 }
 
 int main()
@@ -521,6 +547,11 @@ int main()
     CheckFrame(EImageFormat::Grayscale16, 1920, 1080, 0, 1920ull * 1080 * 2);
     CheckFrame(EImageFormat::Bayer8,  1920, 1080, 0, 1920ull * 1080);
     CheckFrame(EImageFormat::Bayer16, 1920, 1080, 0, 1920ull * 1080 * 2);
+    CheckFrame(EImageFormat::QuadBayer8, 1920, 1080, 0, 1920ull * 1080);
+    CheckFrame(EImageFormat::QuadBayer10, 1920, 1080, 0, 1920ull * 1080 * 2);
+    CheckFrame(EImageFormat::QuadBayer12, 1920, 1080, 0, 1920ull * 1080 * 2);
+    CheckFrame(EImageFormat::QuadBayer14, 1920, 1080, 0, 1920ull * 1080 * 2);
+    CheckFrame(EImageFormat::QuadBayer16, 1920, 1080, 0, 1920ull * 1080 * 2);
     CheckFrame(EImageFormat::Bayer10, 1920, 1080, 0, 1920ull * 1080 * 2);
     CheckFrame(EImageFormat::Bayer12, 1920, 1080, 0, 1920ull * 1080 * 2);
     CheckFrame(EImageFormat::Bayer14, 1920, 1080, 0, 1920ull * 1080 * 2);
@@ -531,10 +562,10 @@ int main()
     // Android RAW14: 4 像素 7 字节 -> 每行 W*7/4
     CheckFrame(EImageFormat::BayerPacked14, 1920, 1080, 0, 1920ull * 7 / 4 * 1080);
 
-    std::printf("\n=== 真实测试素材（带 stride padding） ===\n");
-    // texture_video_format35_1472x1920.yuv 实际是 1440x1920, stride 1472
+    std::printf("\n=== stride padding 与紧凑排布 ===\n");
+    // 合成参数覆盖可见宽度与行跨度不一致的情况。
     CheckFrame(EImageFormat::NV21, 1440, 1920, 1472, 4239360ull);
-    // input_000_frame_132_..._3840x2880.yuv 无 padding
+    // 紧凑排布不包含行末 padding。
     CheckFrame(EImageFormat::NV21, 3840, 2880, 0, 16588800ull);
 
     std::printf("\n=== 平面几何：NV21 1440x1920 stride 1472 ===\n");

@@ -17,7 +17,13 @@ A Windows x64 image viewer and format inspection tool for RGB, grayscale, YUV, B
 
 Use **File → Open File**, `Ctrl + O`, or drag and drop. You can also open a folder and navigate its images in the file browser. Chinese and space-containing paths are supported; quote paths on the command line. Rare Chinese characters may fall outside the current UI glyph set.
 
-Images with headers, such as PNG, JPEG, and DNG, decode automatically. For headerless `.yuv` / `.raw`, confirm the format, visible dimensions, row stride, and color interpretation in Properties; filename inference only supplies initial values. Stride is in **bytes**, including row-end padding. Effective bit depth and container bit depth are separate. Match NV12/NV21 UV order, full/limited range, matrix, primaries, and transfer function to the input.
+Images with headers, such as PNG, JPEG, and DNG, decode automatically. For headerless `.yuv` / `.raw`, confirm the format, visible dimensions, row stride, and color interpretation in Properties; filename inference only supplies initial values. A `.raw` / `.RAW` file with no recognized format in its filename defaults to **Bayer Raw**, **10bit** in a 16bit container. Stride is in **bytes**, including row-end padding. Effective bit depth and container bit depth are separate. Match NV12/NV21 UV order, full/limited range, matrix, primaries, and transfer function to the input.
+
+For Bayer, **RAW colour correction** provides black/white levels, RGB white balance, CCM coefficients and optional sRGB encoding. Opening an image looks for a companion TXT in the image directory: first the same stem, then the stem without a trailing frame number. Valid matching-bit-depth metadata enables correction automatically. **Import TXT manually** lets you choose another file and frame index. Manual choices persist per image and take priority over automatic imports.
+
+Bayer and Quad Bayer default to BGGR and remain selectable independently of TXT imports. Saved image settings and presets retain their selected pattern. CCM defaults to row major, mapping white-balanced camera RGB to linear sRGB; column major and XYZ D65 output are selectable. Missing or invalid metadata leaves the original preview available; **Reset correction** restores it.
+
+The format list has one **Bayer Raw** and one **Quad Bayer Raw** entry, both initially selecting **10bit**. Use the **8/10/12/14/16bit** radio buttons in **Bit depth** to match the input. 8bit uses one byte per pixel; the other options use a 16bit container. Saved settings and explicit filename bit depths remain in use. Select **Quad Bayer Raw** for 2×2 same-colour blocks in a 4×4 CFA pattern. The viewer interpolates each position within the blocks and preserves the original image dimensions and pixel readings.
 
 For example, open your NV21 file with the following command; replace the example path:
 
@@ -44,7 +50,7 @@ The EXIF overlay appears at the upper left of each visible image, below any imag
 
 - Only the first frame is displayed. Multiframe raw files and containers such as GIF have no playback or frame indexing; split the input to inspect other frames.
 - Planar, semiplanar, and packed YUV, RGB/grayscale, and common Bayer patterns are supported. P010/P210 are little-endian and high-bit-aligned; Android packed RAW10/12/14 requires widths divisible by 4 and even heights.
-- Headerless Bayer uses basic bilinear demosaicing without camera black level, white balance, or color matrices. LibRaw outputs DNG as sRGB RGBA8 preview, not a RAW development workflow preserving full sensor dynamic range.
+- Headerless Bayer uses basic bilinear demosaicing with optional black level, white balance and CCM correction. Companion TXT import reads the matching frame's bit depth, black levels, white balance gains and CCM; lens shading tables are not applied. LibRaw outputs DNG as sRGB RGBA8 preview, not a RAW development workflow preserving full sensor dynamic range.
 - P010 does not imply HDR. PQ/HLG requires correct transfer function and primaries plus Windows HDR, display, and driver support. Failure falls back to SDR; `--no-hdr` forces SDR. Detached panels use SDR.
 - Export produces RGB8 SDR without HDR metadata or source alpha. WebP export uses the bundled encoder; WebP and HEIF/HEIC import depend on system WIC codecs. Listed extensions do not guarantee local decoding.
 

@@ -68,6 +68,9 @@
     <ClCompile Include="src\Image\FRawImageLoader.cpp">
       <Filter>Image</Filter>
     </ClCompile>
+    <ClCompile Include="src\Image\FRawMetadata.cpp">
+      <Filter>Image</Filter>
+    </ClCompile>
     <ClCompile Include="src\UI\FMenuBar.cpp">
       <Filter>UI</Filter>
     </ClCompile>
@@ -218,6 +221,12 @@
       <Filter>Image</Filter>
     </ClInclude>
     <ClInclude Include="src\Image\FRawImageLoader.h">
+      <Filter>Image</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Image\FRawMetadata.h">
+      <Filter>Image</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Image\FRawColorTransform.h">
       <Filter>Image</Filter>
     </ClInclude>
     <ClInclude Include="src\UI\FMenuBar.h">

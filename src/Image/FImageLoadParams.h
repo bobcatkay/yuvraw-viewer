@@ -27,7 +27,7 @@ struct FImageLoadParams
     int32_t BitsPerPixel = 8;
 
     // Bayer 滤色阵列排布，仅对 Bayer 家族有意义
-    EBayerPattern BayerPattern = EBayerPattern::RGGB;
+    EBayerPattern BayerPattern = kDefaultBayerPattern;
 
     // 多字节采样在文件中的字节序。固定格式会由 ConstrainStorageLayout 强制回默认值。
     EByteOrder ByteOrder = EByteOrder::LittleEndian;

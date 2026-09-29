@@ -1,6 +1,7 @@
 #include "FImageConfigCache.h"
 
 #include "Image/FImageLimits.h"
+#include "Image/FImageFormatDesc.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -23,7 +24,8 @@ namespace
     constexpr std::array<char, 8> kCacheFileMagic{
         'I', 'D', 'T', 'C', 'F', 'G', '0', '1'
     };
-    constexpr uint32_t kCacheFileVersion = 1u;
+    constexpr uint32_t kLegacyCacheFileVersion = 1u;
+    constexpr uint32_t kCacheFileVersion = 2u;
     constexpr uint32_t kMaximumSerializedEntries = 10000u;
     constexpr uint32_t kMaximumSerializedKeyBytes = 32u * 1024u;
     constexpr uintmax_t kMaximumCacheFileBytes = 32u * 1024u * 1024u;
@@ -108,7 +110,7 @@ namespace
         const FImageViewSettings& view = Configuration.ViewSettings;
 
         const bool bLoadValid =
-            IsEnumInRange(load.Format, EImageFormat::Unknown, EImageFormat::YUV420SP16)
+            FImageFormatDesc::Get(load.Format).Format == load.Format
             && load.Width >= 0
             && load.Width <= FImageLimits::kMaximumDimension
             && load.Height >= 0
@@ -161,7 +163,8 @@ namespace
             && IsEnumInRange(
                 display.ChannelView,
                 EChannelView::Color,
-                EChannelView::Channel4);
+                EChannelView::Channel4)
+            && display.Raw.IsValid();
 
         const bool bViewValid =
             IsEnumInRange(
@@ -186,6 +189,30 @@ namespace
             && load.Format != EImageFormat::Unknown
             && load.Width > 0
             && load.Height > 0;
+    }
+
+    bool WriteRawSettings(std::ostream& Stream, const FRawDisplaySettings& Raw)
+    {
+        if (!WriteBool(Stream, Raw.bEnabled) || !WriteBool(Stream, Raw.bConfigured) ||
+            !WriteValue(Stream, Raw.WhiteLevel) || !WriteBool(Stream, Raw.bApplyCcm) ||
+            !WriteEnum(Stream, Raw.CcmLayout) || !WriteEnum(Stream, Raw.CcmOutput) ||
+            !WriteBool(Stream, Raw.bEncodeSrgb)) { return false; }
+        for (float value : Raw.BlackLevel) { if (!WriteValue(Stream, value)) { return false; } }
+        for (float value : Raw.WhiteBalance) { if (!WriteValue(Stream, value)) { return false; } }
+        for (float value : Raw.Ccm) { if (!WriteValue(Stream, value)) { return false; } }
+        return true;
+    }
+
+    bool ReadRawSettings(std::istream& Stream, FRawDisplaySettings& Raw)
+    {
+        if (!ReadBool(Stream, Raw.bEnabled) || !ReadBool(Stream, Raw.bConfigured) ||
+            !ReadValue(Stream, Raw.WhiteLevel) || !ReadBool(Stream, Raw.bApplyCcm) ||
+            !ReadEnum(Stream, Raw.CcmLayout) || !ReadEnum(Stream, Raw.CcmOutput) ||
+            !ReadBool(Stream, Raw.bEncodeSrgb)) { return false; }
+        for (float& value : Raw.BlackLevel) { if (!ReadValue(Stream, value)) { return false; } }
+        for (float& value : Raw.WhiteBalance) { if (!ReadValue(Stream, value)) { return false; } }
+        for (float& value : Raw.Ccm) { if (!ReadValue(Stream, value)) { return false; } }
+        return Raw.IsValid();
     }
 
     bool WriteConfiguration(
@@ -221,12 +248,14 @@ namespace
             && WriteValue(Stream, view.PanOffsetY)
             && WriteValue(Stream, view.RotationQuarters)
             && WriteBool(Stream, view.bFlipH)
-            && WriteBool(Stream, view.bFlipV);
+            && WriteBool(Stream, view.bFlipV)
+            && WriteRawSettings(Stream, display.Raw);
     }
 
     bool ReadConfiguration(
         std::istream& Stream,
-        FImageConfiguration& OutConfiguration)
+        FImageConfiguration& OutConfiguration,
+        uint32_t Version)
     {
         FImageLoadParams& load = OutConfiguration.LoadParams;
         FDisplaySettings& display = OutConfiguration.DisplaySettings;
@@ -259,7 +288,9 @@ namespace
             && ReadBool(Stream, view.bFlipH)
             && ReadBool(Stream, view.bFlipV);
 
-        return bRead && IsConfigurationStructurallyValid(OutConfiguration);
+        // v1 不包含 RAW 校正字段，保留其加载/显示/视图参数并使用新的 RAW 默认值。
+        return bRead && (Version == kLegacyCacheFileVersion || ReadRawSettings(Stream, display.Raw)) &&
+            IsConfigurationStructurallyValid(OutConfiguration);
     }
 
     std::filesystem::path MakeTemporaryPath(const std::filesystem::path& Path)
@@ -374,7 +405,7 @@ bool FImageConfigCache::LoadFromFile(const std::filesystem::path& Path)
     if (!file.good()
         || magic != kCacheFileMagic
         || !ReadValue(file, version)
-        || version != kCacheFileVersion
+        || (version != kCacheFileVersion && version != kLegacyCacheFileVersion)
         || !ReadValue(file, entryCount)
         || entryCount > kMaximumSerializedEntries)
     {
@@ -402,7 +433,7 @@ bool FImageConfigCache::LoadFromFile(const std::filesystem::path& Path)
 
         if (!file.good()
             || key.find('\0') != std::string::npos
-            || !ReadConfiguration(file, configuration))
+            || !ReadConfiguration(file, configuration, version))
         {
             return false;
         }

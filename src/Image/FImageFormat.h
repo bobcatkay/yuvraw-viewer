@@ -47,6 +47,13 @@ enum class EImageFormat
 
     // --- 可配置半平面 YUV 扩展：只能追加，不能改变前面枚举的持久化值 ---
     YUV420SP16,     // 半平面 4:2:0，16bit 容器；有效位深、字节序与有效位对齐可配置
+
+    // --- Quad Bayer：2x2 同色块组成 4x4 CFA 周期，保持旧枚举的持久化值 ---
+    QuadBayer8,
+    QuadBayer10,    // 10/12/14bit 均使用 16bit 容器
+    QuadBayer12,
+    QuadBayer14,
+    QuadBayer16,    // 有效位深、字节序与有效位对齐可配置
 };
 
 /**
@@ -174,7 +181,7 @@ enum class EColorRange
 };
 
 /**
- * Bayer 滤色阵列排布（以左上角 2x2 为准）
+ * Bayer 滤色阵列排布（普通 Bayer 以像素、Quad Bayer 以 2x2 同色块为单位）
  * 不影响内存布局，只影响去马赛克，因此作为独立参数而不是独立格式
  */
 enum class EBayerPattern
@@ -184,3 +191,5 @@ enum class EBayerPattern
     GRBG,
     GBRG
 };
+
+inline constexpr EBayerPattern kDefaultBayerPattern = EBayerPattern::BGGR;

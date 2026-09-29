@@ -237,7 +237,7 @@ private:
         /// 指向文档里的像素，不拷贝：导出期间整个界面置灰，这块内存不会被换掉
         const FImageData* LoadedImage = nullptr;
 
-        EBayerPattern BayerPattern = EBayerPattern::RGGB;
+        EBayerPattern BayerPattern = kDefaultBayerPattern;
 
         /// 批量导出逐个读盘时的基准参数
         FImageLoadParams BaseParams;

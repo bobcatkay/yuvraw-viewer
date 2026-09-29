@@ -4,11 +4,13 @@
 #include "FUiTheme.h"
 #include "Core/FHdrPresenter.h"
 #include "Core/FUserSettings.h"
+#include "Core/FFileDialog.h"
 #include "Image/FColorTransform.h"
 #include "Image/FImageFormatDesc.h"
 #include "Image/FImageLimits.h"
 #include "Image/FImageLoadParams.h"
 #include "Image/FResolutionGuess.h"
+#include "Image/FRawMetadata.h"
 #include "FToast.h"
 #include "Util.h"
 #include <imgui.h>
@@ -23,6 +25,13 @@ namespace
 
     // 两组显示属性共用 HDR 下拉框的宽度基准，随当前字体与 DPI 一起缩放。
     constexpr const char* kDisplayComboWidthText = "BT.601-525_______";
+    constexpr const char* kBayerPatternComboWidthText = "00000000";
+    constexpr float kBayerPatternComboWidthScale = 1.5f;
+    constexpr const char* kRawNumericFormat = "%.4f";
+    struct FRawBitDepthOption { int32_t BitDepth; EUiText Label; };
+    constexpr FRawBitDepthOption kRawBitDepthOptions[] = {
+        { 8, EUiText::RawBitDepth8 }, { 10, EUiText::RawBitDepth10 },
+        { 12, EUiText::RawBitDepth12 }, { 14, EUiText::RawBitDepth14 }, { 16, EUiText::RawBitDepth16 } };
     constexpr float kHlgPeakDragSpeedNits = 10.0f;
     constexpr float kMinimumHlgPeakNits = 100.0f;
     constexpr float kMaximumHlgPeakNits = 10000.0f;
@@ -181,7 +190,7 @@ FPropertyPanel::FPropertyPanel()
     , SelectedHeight(0)
     , SelectedStride(0)
     , SelectedBitsPerPixel(8)
-    , SelectedBayerPattern(EBayerPattern::RGGB)
+    , SelectedBayerPattern(kDefaultBayerPattern)
     , SelectedByteOrder(EByteOrder::LittleEndian)
     , SelectedSampleAlignment(ESampleAlignment::LeastSignificantBits)
     , Target(EPropertyTarget::Main)
@@ -336,6 +345,10 @@ void FPropertyPanel::SetFileInfo(uint64_t InFileSize, uint64_t InImageSize)
 
 void FPropertyPanel::SetSourceFile(const std::string& InPath)
 {
+    if (SourceFile != InPath)
+    {
+        RawMetadataFrameIndex = FRawMetadata::GetFrameIndex(InPath);
+    }
     SourceFile = InPath;
 }
 
@@ -490,7 +503,7 @@ void FPropertyPanel::RenderFormatSelector()
 
     const char* preview = activePreset
         ? activePreset->Name.c_str()
-        : FLocalization::Translate(selectedDesc.DisplayName);
+        : FLocalization::Translate(FImageFormatDesc::Get(selectedDesc.DisplayFormat).DisplayName);
 
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("000000000000000000").x);
 
@@ -518,13 +531,13 @@ void FPropertyPanel::RenderFormatSelector()
 
             const FFormatDesc& desc = FImageFormatDesc::Get(format);
             const bool bSelected =
-                !activePreset && format == SelectedFormat;
+                !activePreset && format == selectedDesc.DisplayFormat;
 
             if (ImGui::Selectable(FLocalization::Translate(desc.DisplayName), bSelected))
             {
                 SelectedFormatPresetName.clear();
 
-                if (format != SelectedFormat)
+                if (format != selectedDesc.DisplayFormat)
                 {
                     ApplyFormatSelection(format);
                 }
@@ -592,13 +605,13 @@ void FPropertyPanel::RenderFormatSelector()
 
             const FFormatDesc& desc = FImageFormatDesc::Get(format);
             const bool bSelected =
-                !activePreset && format == SelectedFormat;
+                !activePreset && format == selectedDesc.DisplayFormat;
 
             if (ImGui::Selectable(FLocalization::Translate(desc.DisplayName), bSelected))
             {
                 SelectedFormatPresetName.clear();
 
-                if (format != SelectedFormat)
+                if (format != selectedDesc.DisplayFormat)
                 {
                     ApplyFormatSelection(format);
                 }
@@ -1252,7 +1265,8 @@ void FPropertyPanel::RenderBayerPatternSelector()
     const char* patternNames[] = { "RGGB", "BGGR", "GRBG", "GBRG" };
     int32_t patternIndex = static_cast<int32_t>(SelectedBayerPattern);
 
-    ImGui::SetNextItemWidth(ImGui::CalcTextSize("00000000").x);
+    ImGui::SetNextItemWidth(
+        ImGui::CalcTextSize(kBayerPatternComboWidthText).x * kBayerPatternComboWidthScale);
 
     if (ImGui::Combo(u8"CFA", &patternIndex, patternNames, IM_ARRAYSIZE(patternNames)))
     {
@@ -1280,6 +1294,49 @@ void FPropertyPanel::RenderBayerPatternSelector()
 void FPropertyPanel::RenderBitsPerPixelSelector()
 {
     ImGui::Text(FLocalization::Text(EUiText::BitDepth));
+
+    const FFormatDesc& desc = FImageFormatDesc::Get(SelectedFormat);
+    if (desc.ColorModel == EColorModel::Bayer && !desc.bIsPacked)
+    {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float availableWidth = ImGui::GetContentRegionAvail().x;
+        float rowWidth = 0.0f;
+        int32_t requestedBits = SelectedBitsPerPixel;
+        for (const FRawBitDepthOption& option : kRawBitDepthOptions)
+        {
+            const char* label = FLocalization::Text(option.Label);
+            const float itemWidth = ImGui::GetFrameHeight() + style.ItemInnerSpacing.x + ImGui::CalcTextSize(label).x;
+            // 属性面板可以很窄，单选按钮按实际字体宽度换行，避免裁掉后面的位深。
+            if (rowWidth > 0.0f && rowWidth + style.ItemSpacing.x + itemWidth <= availableWidth)
+            {
+                ImGui::SameLine();
+                rowWidth += style.ItemSpacing.x + itemWidth;
+            }
+            else { rowWidth = itemWidth; }
+            if (ImGui::RadioButton(label, SelectedBitsPerPixel == option.BitDepth))
+            {
+                requestedBits = option.BitDepth;
+            }
+        }
+        if (requestedBits != SelectedBitsPerPixel)
+        {
+            const EImageFormat nextFormat = FImageFormatDesc::ResolveBayerBitDepthFormat(SelectedFormat, requestedBits);
+            if (nextFormat != EImageFormat::Unknown)
+            {
+                const EImageFormat oldFormat = SelectedFormat;
+                SelectedFormat = nextFormat;
+                SelectedBitsPerPixel = requestedBits;
+                SelectedFormatPresetName.clear();
+                ConstrainStorageLayout();
+                // 8bit 为单字节，其余位深为 16bit 容器；紧凑 stride 随容器切换。
+                RefreshStrideForGeometry(oldFormat, SelectedWidth);
+                LOGD("RawBitDepth", "Selected %s, bits %d, stride %d",
+                    FImageFormatDesc::Get(nextFormat).Name, requestedBits, SelectedStride);
+                if (OnBitsPerPixelChanged) { OnBitsPerPixelChanged(SelectedBitsPerPixel); }
+            }
+        }
+        return;
+    }
 
     const FBitDepthPropertyState bitDepth =
         FImageFormatDesc::ResolveBitDepth(
@@ -1406,12 +1463,125 @@ void FPropertyPanel::RenderDisplaySettings()
         }
     }
 
+    RenderRawDisplaySettings();
     RenderTransferSettings();
+}
+
+void FPropertyPanel::RenderRawDisplaySettings()
+{
+    if (!FImageFormatDesc::IsBayer(CurrentImageData->GetFormat())) { return; }
+    ImGui::Separator();
+    ImGui::TextUnformatted(FLocalization::Text(EUiText::RawColorCorrection));
+    auto& raw = SelectedDisplay.Raw;
+    bool bChanged = ImGui::Checkbox(FLocalization::Text(EUiText::RawEnableCorrection), &raw.bEnabled);
+
+    DrawIntInput(FLocalization::Text(EUiText::RawMetadataFrame), RawMetadataFrameIndex,
+        0, FRawMetadata::kMaximumFrameIndex);
+    ImGui::BeginDisabled(SourceFile.empty());
+    if (ImGui::Button(FLocalization::Text(EUiText::RawImportMetadata)))
+    {
+        std::string path;
+        if (FFileDialog::OpenFile(FLocalization::Text(EUiText::RawImportMetadata), { ".txt" }, path))
+        {
+            const auto result = FRawMetadata::LoadFile(path, RawMetadataFrameIndex,
+                CurrentImageData->GetSourceBitDepth(), raw);
+            EUiText message = EUiText::RawMetadataInvalid;
+            switch (result)
+            {
+            case ERawMetadataResult::Success: message = EUiText::RawMetadataImported; bChanged = true; break;
+            case ERawMetadataResult::NotFound: message = EUiText::RawMetadataNotFound; break;
+            case ERawMetadataResult::FrameNotFound: message = EUiText::RawMetadataFrameNotFound; break;
+            case ERawMetadataResult::BitDepthMismatch: message = EUiText::RawMetadataBitDepthMismatch; break;
+            default: break;
+            }
+            if (result != ERawMetadataResult::Success)
+            {
+                LOGW("RawMetadata", "Manual TXT import failed, frame %d, reason %d",
+                    RawMetadataFrameIndex, static_cast<int32_t>(result));
+            }
+            FToast::Show(FLocalization::Text(message));
+        }
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button(FLocalization::Text(EUiText::RawResetCorrection)))
+    {
+        raw = FRawDisplaySettings{};
+        bChanged = true;
+        LOGD("RawColor", "%s", "Reset RAW colour correction to identity");
+    }
+
+    ImGui::BeginDisabled(!raw.bEnabled);
+    const auto editValues = [](EUiText Label, float* Values, int32_t Count, float Minimum, float Maximum, bool bShowLabel = true)
+    {
+        if (bShowLabel) { ImGui::TextUnformatted(FLocalization::Text(Label)); }
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::PushID(static_cast<int32_t>(Label));
+        if (ImGui::InputScalarN("##RawValues", ImGuiDataType_Float, Values, Count,
+                nullptr, nullptr, kRawNumericFormat))
+        {
+            for (int32_t i = 0; i < Count; ++i)
+            {
+                Values[i] = std::isfinite(Values[i]) ? std::clamp(Values[i], Minimum, Maximum) : Minimum;
+            }
+        }
+        // 等数值输入提交再统计直方图，避免用户输入每个字符都重做整次采样。
+        const bool bCommitted = ImGui::IsItemDeactivatedAfterEdit();
+        ImGui::PopID();
+        return bCommitted;
+    };
+    const float maximum = static_cast<float>((1 << CurrentImageData->GetSourceBitDepth()) - 1);
+    bChanged |= editValues(EUiText::RawBlackLevel, raw.BlackLevel.data(),
+        FRawDisplaySettings::kCfaChannelCount, 0.0f, maximum - 1.0f);
+    bChanged |= editValues(EUiText::RawWhiteLevel, &raw.WhiteLevel, 1, 0.0f, maximum);
+    bChanged |= editValues(EUiText::RawWhiteBalance, raw.WhiteBalance.data(),
+        FRawDisplaySettings::kRgbChannelCount, FRawDisplaySettings::kMinimumGain, FRawDisplaySettings::kMaximumGain);
+    bChanged |= ImGui::Checkbox(FLocalization::Text(EUiText::RawApplyCcm), &raw.bApplyCcm);
+    ImGui::BeginDisabled(!raw.bApplyCcm);
+    const char* layouts[] = { FLocalization::Text(EUiText::RawCcmRowMajor), FLocalization::Text(EUiText::RawCcmColumnMajor) };
+    int32_t layout = static_cast<int32_t>(raw.CcmLayout);
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize(kDisplayComboWidthText).x);
+    if (ImGui::Combo(FLocalization::Text(EUiText::RawCcmLayout), &layout, layouts, IM_ARRAYSIZE(layouts)))
+    {
+        raw.CcmLayout = static_cast<ERawCcmLayout>(layout);
+        bChanged = true;
+    }
+    const char* outputs[] = { FLocalization::Text(EUiText::RawCcmLinearSrgb), FLocalization::Text(EUiText::RawCcmXyzD65) };
+    int32_t output = static_cast<int32_t>(raw.CcmOutput);
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize(kDisplayComboWidthText).x);
+    if (ImGui::Combo(FLocalization::Text(EUiText::RawCcmOutput), &output, outputs, IM_ARRAYSIZE(outputs)))
+    {
+        raw.CcmOutput = static_cast<ERawCcmOutput>(output);
+        bChanged = true;
+    }
+    // 九个系数按 TXT 的原始顺序编辑；下拉选择决定三组数字解释为行还是列。
+    for (int32_t group = 0; group < FRawDisplaySettings::kRgbChannelCount; ++group)
+    {
+        ImGui::PushID(group);
+        bChanged |= editValues(EUiText::RawCcmCoefficients,
+            raw.Ccm.data() + group * FRawDisplaySettings::kRgbChannelCount,
+            FRawDisplaySettings::kRgbChannelCount,
+            -FRawDisplaySettings::kMaximumMatrixCoefficient, FRawDisplaySettings::kMaximumMatrixCoefficient, group == 0);
+        ImGui::PopID();
+    }
+    ImGui::EndDisabled();
+    bChanged |= ImGui::Checkbox(FLocalization::Text(EUiText::RawEncodeSrgb), &raw.bEncodeSrgb);
+    ImGui::EndDisabled();
+    if (bChanged)
+    {
+        if (raw.WhiteLevel > 0.0f)
+        {
+            const float largestBlack = *std::max_element(raw.BlackLevel.begin(), raw.BlackLevel.end());
+            raw.WhiteLevel = std::max(raw.WhiteLevel, largestBlack + 1.0f);
+        }
+        raw.bConfigured = true;
+        NotifyDisplaySettingsChanged();
+    }
 }
 
 void FPropertyPanel::RenderTransferSettings()
 {
-    // Bayer 是传感器线性读数，传输函数/原色在它上面没有意义，着色器那边也没接
+    // Bayer 使用专门的 RAW 校正与输出编码，不能重复套用 RGB/YUV 的输入 EOTF。
     if (FImageFormatDesc::Get(CurrentImageData->GetFormat()).ColorModel == EColorModel::Bayer)
     {
         return;

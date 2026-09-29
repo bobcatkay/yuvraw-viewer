@@ -2,6 +2,9 @@
 
 #include "FImageFormat.h"
 
+#include <array>
+#include <cmath>
+
 /**
  * 通道隔离模式。数值直接传给着色器的 uChannelMode uniform。
  * YUV 格式下 1/2/3 = Y/U/V；RGB 格式下 1/2/3/4 = R/G/B/A。
@@ -13,6 +16,61 @@ enum class EChannelView
     Channel2 = 2,
     Channel3 = 3,
     Channel4 = 4,
+};
+
+enum class ERawCcmLayout { RowMajor = 0, ColumnMajor = 1 };
+enum class ERawCcmOutput { LinearSrgb = 0, XyzD65 = 1 };
+
+/** RAW 显示校正，保留可回退的原始预览；厂商矩阵约定由用户明确选择。 */
+struct FRawDisplaySettings
+{
+    static constexpr int32_t kCfaChannelCount = 4;
+    static constexpr int32_t kRgbChannelCount = 3;
+    static constexpr int32_t kMatrixElementCount = kRgbChannelCount * kRgbChannelCount;
+    static constexpr float kMaximumCodeValue = 65535.0f;
+    static constexpr float kMinimumGain = 0.001f;
+    static constexpr float kMaximumGain = 64.0f;
+    static constexpr float kMaximumMatrixCoefficient = 16.0f;
+
+    bool bEnabled = false;
+    // 包括用户主动关闭校正的选择，缓存恢复或重载时不再由 TXT 覆盖。
+    bool bConfigured = false;
+    // 按 CFA 周期的左上、右上、左下、右下排列；Quad Bayer 每项对应一个同色块。
+    // 位置不受用户切换 CFA 排布影响。
+    std::array<float, kCfaChannelCount> BlackLevel{};
+    // 0 表示使用当前图像的有效位深满量程，兼容 packed RAW 解包后的 Bayer16。
+    float WhiteLevel = 0.0f;
+    std::array<float, kRgbChannelCount> WhiteBalance{ 1.0f, 1.0f, 1.0f };
+    bool bApplyCcm = true;
+    std::array<float, kMatrixElementCount> Ccm{
+        1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f };
+    ERawCcmLayout CcmLayout = ERawCcmLayout::RowMajor;
+    ERawCcmOutput CcmOutput = ERawCcmOutput::LinearSrgb;
+    bool bEncodeSrgb = true;
+
+    bool IsValid() const
+    {
+        if ((CcmLayout != ERawCcmLayout::RowMajor && CcmLayout != ERawCcmLayout::ColumnMajor) ||
+            (CcmOutput != ERawCcmOutput::LinearSrgb && CcmOutput != ERawCcmOutput::XyzD65) ||
+            !std::isfinite(WhiteLevel) || WhiteLevel < 0.0f || WhiteLevel > kMaximumCodeValue)
+        {
+            return false;
+        }
+        for (float value : BlackLevel)
+        {
+            if (!std::isfinite(value) || value < 0.0f || value >= kMaximumCodeValue ||
+                (WhiteLevel > 0.0f && value >= WhiteLevel)) { return false; }
+        }
+        for (float value : WhiteBalance)
+        {
+            if (!std::isfinite(value) || value < kMinimumGain || value > kMaximumGain) { return false; }
+        }
+        for (float value : Ccm)
+        {
+            if (!std::isfinite(value) || std::fabs(value) > kMaximumMatrixCoefficient) { return false; }
+        }
+        return true;
+    }
 };
 
 /**
@@ -89,4 +147,6 @@ struct FDisplaySettings
     // --- 通道隔离 ---
 
     EChannelView ChannelView = EChannelView::Color;
+
+    FRawDisplaySettings Raw;
 };

@@ -11,6 +11,11 @@ namespace
     int GFailures = 0;
     constexpr int32_t kPersistedMarker = 11;
     constexpr int32_t kNewEntryMarker = 12;
+    constexpr std::array<float, FRawDisplaySettings::kCfaChannelCount> kRawBlackLevels{ 1.0f, 2.0f, 3.0f, 4.0f };
+    constexpr float kRawWhiteLevel = 900.0f;
+    constexpr std::array<float, FRawDisplaySettings::kRgbChannelCount> kRawGains{ 2.0f, 1.5f, 3.0f };
+    constexpr std::array<float, FRawDisplaySettings::kMatrixElementCount> kRawMatrix{
+        1.1f, 0.2f, 0.3f, 0.4f, 1.5f, 0.6f, 0.7f, 0.8f, 1.9f };
 
     void Check(bool bCondition, const char* Message)
     {
@@ -26,7 +31,7 @@ namespace
     {
         FImageConfiguration configuration;
         // 使用当前追加在枚举末尾的格式，确保缓存结构校验同步接受新持久化值。
-        configuration.LoadParams.Format = EImageFormat::YUV420SP16;
+        configuration.LoadParams.Format = EImageFormat::QuadBayer16;
         configuration.LoadParams.Width = Marker;
         configuration.LoadParams.Height = Marker + 1;
         configuration.LoadParams.Stride = Marker + 2;
@@ -49,6 +54,17 @@ namespace
         configuration.DisplaySettings.ToneMapWhite = 6.0f;
         configuration.DisplaySettings.bShowOutOfRange = true;
         configuration.DisplaySettings.ChannelView = EChannelView::Channel4;
+        auto& raw = configuration.DisplaySettings.Raw;
+        raw.bEnabled = true;
+        raw.bConfigured = true;
+        raw.BlackLevel = kRawBlackLevels;
+        raw.WhiteLevel = kRawWhiteLevel;
+        raw.WhiteBalance = kRawGains;
+        raw.Ccm = kRawMatrix;
+        raw.CcmLayout = ERawCcmLayout::ColumnMajor;
+        raw.CcmOutput = ERawCcmOutput::XyzD65;
+        raw.bApplyCcm = false;
+        raw.bEncodeSrgb = false;
 
         configuration.ViewSettings.DisplayMode = EDisplayMode::Manual;
         configuration.ViewSettings.ManualScale = static_cast<float>(Marker);
@@ -90,6 +106,16 @@ namespace
                 == Right.DisplaySettings.bShowOutOfRange
             && Left.DisplaySettings.ChannelView
                 == Right.DisplaySettings.ChannelView
+            && Left.DisplaySettings.Raw.bEnabled == Right.DisplaySettings.Raw.bEnabled
+            && Left.DisplaySettings.Raw.bConfigured == Right.DisplaySettings.Raw.bConfigured
+            && Left.DisplaySettings.Raw.BlackLevel == Right.DisplaySettings.Raw.BlackLevel
+            && Left.DisplaySettings.Raw.WhiteLevel == Right.DisplaySettings.Raw.WhiteLevel
+            && Left.DisplaySettings.Raw.WhiteBalance == Right.DisplaySettings.Raw.WhiteBalance
+            && Left.DisplaySettings.Raw.Ccm == Right.DisplaySettings.Raw.Ccm
+            && Left.DisplaySettings.Raw.CcmLayout == Right.DisplaySettings.Raw.CcmLayout
+            && Left.DisplaySettings.Raw.CcmOutput == Right.DisplaySettings.Raw.CcmOutput
+            && Left.DisplaySettings.Raw.bApplyCcm == Right.DisplaySettings.Raw.bApplyCcm
+            && Left.DisplaySettings.Raw.bEncodeSrgb == Right.DisplaySettings.Raw.bEncodeSrgb
             && Left.ViewSettings.DisplayMode == Right.ViewSettings.DisplayMode
             && Left.ViewSettings.ManualScale == Right.ViewSettings.ManualScale
             && Left.ViewSettings.PanOffsetX == Right.ViewSettings.PanOffsetX

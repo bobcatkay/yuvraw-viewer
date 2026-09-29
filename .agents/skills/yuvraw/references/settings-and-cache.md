@@ -71,6 +71,13 @@ ImGui 布局独立保存在 `%LOCALAPPDATA%\YUVRaw\imgui.ini`，由 `FUiResource
   `settings.ini`、图片属性缓存、运行期目录继承记录、最近文件与 `imgui.ini` 布局数据，
   并恢复默认偏好。缩容必须立即淘汰最久未使用项
 
+### RAW 显示校正缓存
+
+图片缓存 v2 追加完整 `FRawDisplaySettings`，兼容读取 v1 并保留原有参数。
+手动导入、编辑或关闭 RAW 校正均标记为用户配置，按文件缓存恢复后优先于自动 TXT；
+自动导入的参数在下次打开时重新读取，避免配套 TXT 更新后仍使用旧值。
+同一文件修改 Bayer 排布/stride 等加载参数时保留用户校正；新文件不继承上一张的 RAW 增益与黑电平。
+
 ## 自定义图像格式预设
 
 属性面板“图像格式”右侧的“保存”按钮把当前完整 `FImageLoadParams`（基础格式、宽高、stride、

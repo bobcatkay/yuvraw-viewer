@@ -257,6 +257,7 @@ private:
     void RenderBayerPatternSelector();
     void RenderBitsPerPixelSelector();
     void RenderDisplaySettings();
+    void RenderRawDisplaySettings();
 
     /**
      * 三原色 / 传输函数 / 色调映射 / 曝光 / 超范围高亮
@@ -323,6 +324,7 @@ private:
     uint64_t ImageSize;
 
     std::string SourceFile;
+    int32_t RawMetadataFrameIndex = 0;
 
     // --- 自定义图像格式预设 ---
 

@@ -442,9 +442,8 @@ namespace FShaders
      * 工具场景下正确性优先于画质：双线性会在高频边缘产生拉链纹，
      * 但能如实反映 CFA 排布是否选对 —— 选错 pattern 时颜色会明显翻车，这正是我们想看到的。
      *
-     * **刻意不接色彩管线**：CFA 是传感器出来的原始读数，本来就在线性域，
-     * 上面既没有 gamma 也没有 PQ，套一层 EOTF 只会得到一个没有物理含义的结果。
-     * 想看 RAW 的亮度关系请用曝光/直方图，不要用传输函数。
+     * CFA 本身在线性域，不套用 YUV/RGB 的 EOTF。可选 RAW 校正与
+     * FRawColorTransform 对齐：扣黑/白电平归一化 -> 插值 -> 白平衡 -> CCM -> sRGB 编码。
      *
      * uBayerPattern: 0=RGGB 1=BGGR 2=GRBG 3=GBRG
      */
@@ -460,15 +459,50 @@ namespace FShaders
             uniform vec2  uImageSize;
             uniform float uSampleScale;   // 16bit 容器里装 10/12bit 时把值拉回满量程
             uniform int   uBayerPattern;
+            uniform int   uBayerBlockSize = 1; // Quad Bayer 为 2，普通 Bayer 为 1
+            uniform int   uRawEnabled;
+            uniform int   uRawEncodeSrgb;
+            uniform vec4  uRawBlackLevel;
+            uniform vec4  uRawScale;
+            uniform vec3  uRawWhiteBalance;
+            uniform mat3  uRawCcm;
             uniform vec2  uTextureOrigin0 = vec2(0.0);
             uniform int   uChannelMode;   // 0=彩色 1/2/3=R/G/B
 
-            // 带边界钳制的整数取样
+            int ClampBayerCoordinate(int coord, int size)
+            {
+                // 保留同色块内位置，与 CPU 的边界处理一致。
+                int phase = (coord % uBayerBlockSize + uBayerBlockSize) % uBayerBlockSize;
+                int first = min(phase, size - 1);
+                int last = size - 1 - (size - 1 - first) % uBayerBlockSize;
+                return clamp(coord, first, last);
+            }
+
+            // 全图坐标确定 CFA 相位，分块仅改变纹理内的存储位置。
             float Fetch(ivec2 coord)
             {
-                ivec2 maxCoord = ivec2(uImageSize) - ivec2(1);
-                coord = clamp(coord, ivec2(0), maxCoord);
-                return texelFetch(uTexture, coord - ivec2(uTextureOrigin0), 0).r * uSampleScale;
+                coord = ivec2(ClampBayerCoordinate(coord.x, int(uImageSize.x)),
+                              ClampBayerCoordinate(coord.y, int(uImageSize.y)));
+                float level = texelFetch(uTexture, coord - ivec2(uTextureOrigin0), 0).r * uSampleScale;
+                if (uRawEnabled != 0)
+                {
+                    ivec2 block = coord / uBayerBlockSize;
+                    int cfaIndex = (block.y & 1) * 2 + (block.x & 1);
+                    level = max(level - uRawBlackLevel[cfaIndex], 0.0) * uRawScale[cfaIndex];
+                }
+                return level;
+            }
+
+            // 与 FColorTransform::SrgbEncode 一致，仅编码校正后的线性输出。
+            float EncodeRawSrgb(float value)
+            {
+                const float kLinearThreshold = 0.0031308;
+                const float kLinearSlope = 12.92;
+                const float kPowerScale = 1.055;
+                const float kPowerOffset = 0.055;
+                const float kGamma = 2.4;
+                return value <= kLinearThreshold ? kLinearSlope * value :
+                    kPowerScale * pow(value, 1.0 / kGamma) - kPowerOffset;
             }
 
             void main()
@@ -484,22 +518,24 @@ namespace FShaders
                 else if (uBayerPattern == 2) { redOrigin = ivec2(1, 0); }  // GRBG
                 else                         { redOrigin = ivec2(0, 1); }  // GBRG
 
-                int dx = (p.x - redOrigin.x) & 1;
-                int dy = (p.y - redOrigin.y) & 1;
+                ivec2 block = p / uBayerBlockSize;
+                int dx = (block.x - redOrigin.x) & 1;
+                int dy = (block.y - redOrigin.y) & 1;
 
                 float center = Fetch(p);
 
-                // 四邻域与四对角
-                float left  = Fetch(p + ivec2(-1,  0));
-                float right = Fetch(p + ivec2( 1,  0));
-                float up    = Fetch(p + ivec2( 0, -1));
-                float down  = Fetch(p + ivec2( 0,  1));
+                // Quad Bayer 分别插值四个块内位置，邻域步长为同色块边长。
+                int step = uBayerBlockSize;
+                float left  = Fetch(p + ivec2(-step,     0));
+                float right = Fetch(p + ivec2( step,     0));
+                float up    = Fetch(p + ivec2(    0, -step));
+                float down  = Fetch(p + ivec2(    0,  step));
 
                 float horizontal = (left + right) * 0.5;
                 float vertical   = (up + down) * 0.5;
                 float cross4     = (left + right + up + down) * 0.25;
-                float diagonal4  = (Fetch(p + ivec2(-1, -1)) + Fetch(p + ivec2(1, -1)) +
-                                    Fetch(p + ivec2(-1,  1)) + Fetch(p + ivec2(1,  1))) * 0.25;
+                float diagonal4  = (Fetch(p + ivec2(-step, -step)) + Fetch(p + ivec2(step, -step)) +
+                                    Fetch(p + ivec2(-step,  step)) + Fetch(p + ivec2(step,  step))) * 0.25;
 
                 vec3 rgb;
 
@@ -524,7 +560,15 @@ namespace FShaders
                     rgb = vec3(vertical, center, horizontal);
                 }
 
+                if (uRawEnabled != 0)
+                {
+                    rgb = uRawCcm * (rgb * uRawWhiteBalance);
+                }
                 rgb = clamp(rgb, 0.0, 1.0);
+                if (uRawEnabled != 0 && uRawEncodeSrgb != 0)
+                {
+                    rgb = vec3(EncodeRawSrgb(rgb.r), EncodeRawSrgb(rgb.g), EncodeRawSrgb(rgb.b));
+                }
 
                 if      (uChannelMode == 1) { FragColor = vec4(vec3(rgb.r), 1.0); }
                 else if (uChannelMode == 2) { FragColor = vec4(vec3(rgb.g), 1.0); }
@@ -628,6 +672,11 @@ namespace FShaders
         case EImageFormat::BayerPacked10:
         case EImageFormat::BayerPacked12:
         case EImageFormat::BayerPacked14:
+        case EImageFormat::QuadBayer8:
+        case EImageFormat::QuadBayer10:
+        case EImageFormat::QuadBayer12:
+        case EImageFormat::QuadBayer14:
+        case EImageFormat::QuadBayer16:
             return GetBayerShader();
 
         case EImageFormat::Grayscale8:

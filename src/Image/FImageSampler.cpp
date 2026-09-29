@@ -123,6 +123,15 @@ namespace
         return true;
     }
 
+    int32_t ClampBayerCoordinate(int32_t Coordinate, int32_t Size, int32_t BlockSize)
+    {
+        // Quad Bayer 的四个块内位置分别插值；边界钳制必须保留块内位置。
+        const int32_t phase = (Coordinate % BlockSize + BlockSize) % BlockSize;
+        const int32_t first = std::min(phase, Size - 1);
+        const int32_t last = Size - 1 - (Size - 1 - first) % BlockSize;
+        return std::clamp(Coordinate, first, last);
+    }
+
     /**
      * 读取 Bayer 采样并钳制到图像边界，与 GPU shader 的 Fetch() 规则一致。
      */
@@ -133,10 +142,12 @@ namespace
         int32_t Y,
         int32_t SampleShift,
         float MaxValue,
+        const FRawColorTransform::FContext& Raw,
         float& OutLevel)
     {
-        const int32_t clampedX = std::min(std::max(X, 0), ImageData.GetWidth() - 1);
-        const int32_t clampedY = std::min(std::max(Y, 0), ImageData.GetHeight() - 1);
+        const int32_t blockSize = Desc.BayerBlockSize;
+        const int32_t clampedX = ClampBayerCoordinate(X, ImageData.GetWidth(), blockSize);
+        const int32_t clampedY = ClampBayerCoordinate(Y, ImageData.GetHeight(), blockSize);
 
         int32_t values[4] = { 0, 0, 0, 0 };
 
@@ -146,6 +157,8 @@ namespace
         }
 
         OutLevel = static_cast<float>(values[0] >> SampleShift) / MaxValue;
+        OutLevel = FRawColorTransform::Normalize(
+            Raw, OutLevel, clampedX / blockSize, clampedY / blockSize);
 
         return true;
     }
@@ -228,11 +241,11 @@ namespace
         case EColorModel::Bayer:
         {
             // 原始读数仍只报告中心 CFA 点；显示 RGB 则与 GPU 一样做双线性去马赛克。
-            // Bayer 是传感器线性读数，因此刻意不走传输函数/原色管线。
+            // CFA 在线性域先扣黑电平，插值后应用白平衡/相机矩阵，最后才可做输出编码。
             OutSample.Count = 1;
             OutSample.Values[0] = plane0[0] >> sampleShift;
 
-            // 各排布下红色滤片在 2x2 中的位置，与着色器保持一致
+            // 在 CFA 块坐标中识别颜色：Quad Bayer 每块 2x2，普通 Bayer 每块 1x1。
             int32_t redX = 0;
             int32_t redY = 0;
 
@@ -244,10 +257,12 @@ namespace
             case EBayerPattern::GBRG: redX = 0; redY = 1; break;
             }
 
-            const int32_t dx = (X - redX) & 1;
-            const int32_t dy = (Y - redY) & 1;
+            const int32_t step = Ctx.BayerBlockSize;
+            const int32_t dx = (X / step - redX) & 1;
+            const int32_t dy = (Y / step - redY) & 1;
 
-            const float center = static_cast<float>(OutSample.Values[0]) / maxF;
+            const float center = FRawColorTransform::Normalize(
+                Ctx.Raw, static_cast<float>(OutSample.Values[0]) / maxF, X / step, Y / step);
             float left = 0.0f;
             float right = 0.0f;
             float up = 0.0f;
@@ -257,14 +272,16 @@ namespace
             float downLeft = 0.0f;
             float downRight = 0.0f;
 
-            if (!FetchBayerLevel(ImageData, desc, X - 1, Y,     sampleShift, maxF, left) ||
-                !FetchBayerLevel(ImageData, desc, X + 1, Y,     sampleShift, maxF, right) ||
-                !FetchBayerLevel(ImageData, desc, X,     Y - 1, sampleShift, maxF, up) ||
-                !FetchBayerLevel(ImageData, desc, X,     Y + 1, sampleShift, maxF, down) ||
-                !FetchBayerLevel(ImageData, desc, X - 1, Y - 1, sampleShift, maxF, upLeft) ||
-                !FetchBayerLevel(ImageData, desc, X + 1, Y - 1, sampleShift, maxF, upRight) ||
-                !FetchBayerLevel(ImageData, desc, X - 1, Y + 1, sampleShift, maxF, downLeft) ||
-                !FetchBayerLevel(ImageData, desc, X + 1, Y + 1, sampleShift, maxF, downRight))
+            // Quad Bayer 用两个原始像素的步长访问相邻颜色块，不混合块内的同色点。
+            // 原尺寸、中心 RAW 读数和已有两纹素分块 halo 因此都保持有效。
+            if (!FetchBayerLevel(ImageData, desc, X - step, Y,        sampleShift, maxF, Ctx.Raw, left) ||
+                !FetchBayerLevel(ImageData, desc, X + step, Y,        sampleShift, maxF, Ctx.Raw, right) ||
+                !FetchBayerLevel(ImageData, desc, X,        Y - step, sampleShift, maxF, Ctx.Raw, up) ||
+                !FetchBayerLevel(ImageData, desc, X,        Y + step, sampleShift, maxF, Ctx.Raw, down) ||
+                !FetchBayerLevel(ImageData, desc, X - step, Y - step, sampleShift, maxF, Ctx.Raw, upLeft) ||
+                !FetchBayerLevel(ImageData, desc, X + step, Y - step, sampleShift, maxF, Ctx.Raw, upRight) ||
+                !FetchBayerLevel(ImageData, desc, X - step, Y + step, sampleShift, maxF, Ctx.Raw, downLeft) ||
+                !FetchBayerLevel(ImageData, desc, X + step, Y + step, sampleShift, maxF, Ctx.Raw, downRight))
             {
                 return false;
             }
@@ -305,10 +322,11 @@ namespace
                 rgb[2] = horizontal;
             }
 
+            FRawColorTransform::ApplyMatrix(Ctx.Raw, rgb);
             for (int32_t c = 0; c < 3; ++c)
             {
                 OutSample.SourceRgb[c] = rgb[c];
-                OutSample.Rgb[c] = std::max(0.0f, std::min(1.0f, rgb[c]));
+                OutSample.Rgb[c] = FRawColorTransform::Encode(Ctx.Raw, rgb[c]);
             }
 
             return true;
@@ -451,8 +469,10 @@ namespace FImageSampler
         const int32_t bitDepth = ImageData.GetSourceBitDepth();
 
         ctx.BayerPattern = BayerPattern;
+        ctx.BayerBlockSize = FImageFormatDesc::Get(ImageData.GetFormat()).BayerBlockSize;
         ctx.MaxValue = (1 << bitDepth) - 1;
         ctx.SampleShift = ImageData.GetSampleShift();
+        ctx.Raw = FRawColorTransform::Build(Display.Raw, ctx.MaxValue);
 
         FColorTransform::BuildYuvToRgb(
             Display.ColorSpace, Display.ColorRange, bitDepth, ctx.YuvMatrix, ctx.YuvOffset);

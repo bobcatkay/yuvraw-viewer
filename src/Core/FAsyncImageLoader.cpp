@@ -6,6 +6,7 @@
 #include "Image/FImageLimits.h"
 #include "Image/FImageLoader.h"
 #include "Image/FResolutionGuess.h"
+#include "Image/FRawMetadata.h"
 #include "gl/FTexture.h"
 #include "gl/FSparseTexture.h"
 #include "Util.h"
@@ -268,6 +269,15 @@ namespace
                 result.Params.Stride = 0;
             }
 
+            // TXT 是小型配套元数据，随解码在后台读取，不在逐帧 UI 路径访问磁盘。
+            if (FImageFormatDesc::IsBayer(decoded->GetFormat()))
+            {
+                FRawDisplaySettings raw;
+                if (FRawMetadata::LoadForRawFile(result.FilePath, decoded->GetSourceBitDepth(), raw) == ERawMetadataResult::Success)
+                {
+                    result.RawDisplay = raw;
+                }
+            }
             result.ImageData = std::move(decoded);
             result.LastError.clear();
             result.SuccessfulAttemptIndex = static_cast<int32_t>(attemptIndex);

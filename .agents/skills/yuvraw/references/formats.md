@@ -30,7 +30,10 @@
 **表的顺序必须与 `EImageFormat` 枚举严格一致** —— `Get()` 直接按下标取，`tests/TestFormatDesc.cpp` 会校验这一点。
 
 面向用户的格式下拉顺序走 `GetDisplayOrder()`：`Unknown` 在首项，RGB 格式按位深集中展示，
-其余格式保持描述表相对顺序。新增格式仍然只追加枚举和描述表，禁止为了 UI 排序重排二者。
+未打包 Bayer/Quad Bayer 通过 `DisplayFormat` 各合并为一个默认 10bit 的入口，位深用
+8/10/12/14/16bit 单选按钮选择。旧枚举与 ASCII 格式名保留加载、缓存及预设兼容，
+`ResolveBayerBitDepthFormat()` 根据当前 CFA 家族找到对应的存储格式；8bit 使用单字节，
+其余选项使用 16bit 容器。新增格式仍只追加枚举和描述表，禁止为了 UI 排序重排二者。
 
 ### 新增图像格式
 
@@ -42,6 +45,19 @@
 然后跑 `tests/run_tests.ps1`。只有当这个格式需要新的着色器族（现有的有：半平面 YUV / 平面 YUV / packed YUV / Bayer / 灰度 / RGB）时，才需要在 `FShaders.h` 加着色器并在 `GetFragmentShaderForFormat` 里分支。
 
 ## 位深与采样布局
+
+### Quad Bayer
+
+`QuadBayer8/10/12/14/16` 追加在枚举与描述表末尾，保持既有持久化值；
+界面合并为 `Quad Bayer Raw`，普通未打包 Bayer 合并为 `Bayer Raw`，都默认 10bit。
+8bit 使用单字节；10/12/14bit 使用低位对齐的 16bit 容器，字节序可选；
+底层 16bit 格式仍兼容旧预设中的 8–16bit 有效位深与布局参数。
+`FFormatDesc::BayerBlockSize` 对普通 Bayer 为 1、Quad Bayer 为 2，后者每个 2x2 同色块
+组成 4x4 CFA 周期。加载器保留原始尺寸和数据，CPU/GLSL 按块坐标确定颜色，以块边长
+为邻域步长分别插值块内四个位置；边界钳制保留块内相位，分块的两纹素 halo 仍足够。
+探针保留中心原始码值，RGB 统计与导出走同一采样算法。所有 Bayer 默认 BGGR，
+`kDefaultBayerPattern` 统一提供初值；用户选择、预设与图片缓存保留其显式排布。
+这是一种基础双线性预览算法，不进行同色块合并或厂商 remosaic。
 
 相机 RAW 极常见的情况：10/12/14bit 数据装在 16bit 容器里。只知道容器宽度不足以正确显示。
 `FImageData` 因此有两个可覆盖的字段（`SetSampleLayout`）：

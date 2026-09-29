@@ -4,6 +4,7 @@
 #include "FDisplaySettings.h"
 #include "FImageData.h"
 #include "FImageFormat.h"
+#include "FRawColorTransform.h"
 
 #include <cstdint>
 #include <vector>
@@ -41,11 +42,11 @@ struct FPixelSample
      * 按有效位深归一化的源 RGB 码值，供直方图统计。
      * YUV 已完成范围还原与矩阵转换，但未经过 EOTF、曝光、色调映射或裁剪；
      * PQ/HLG 仍保留对应的非线性编码，超出 [0,1] 的分量也原样保留。
-     * Bayer 使用源传感器码值域的双线性去马赛克结果，不套用传输函数。
+     * Bayer 在启用 RAW 校正时保留黑电平/白平衡/CCM 后的线性 RGB，尚未做 sRGB 编码。
      */
     float SourceRgb[3] = { 0.0f, 0.0f, 0.0f };
 
-    /// SDR 预览输出 RGB（0-1），Bayer 时为双线性去马赛克结果；不代表 HDR 屏幕输出
+    /// SDR 预览输出 RGB（0-1），包含 Bayer 可选 RAW 校正与 sRGB 编码；不代表 HDR 屏幕输出
     float Rgb[3] = { 0.0f, 0.0f, 0.0f };
 
     /**
@@ -75,8 +76,10 @@ namespace FImageSampler
         float YuvOffset[3] = {};
 
         FColorTransform::FColorPipeline Pipeline;
+        FRawColorTransform::FContext Raw;
 
-        EBayerPattern BayerPattern = EBayerPattern::RGGB;
+        EBayerPattern BayerPattern = kDefaultBayerPattern;
+        int32_t BayerBlockSize = 1;
 
         int32_t MaxValue = 255;
         int32_t SampleShift = 0;

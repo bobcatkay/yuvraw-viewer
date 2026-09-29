@@ -27,6 +27,8 @@ src/
   Image/
     FImageFormat.h         EImageFormat / EColorModel / EColorSpace / EColorRange / EBayerPattern
     FDisplaySettings.h     EChannelView + FDisplaySettings（三轴色彩 + 色调映射/曝光，**按文档存**）
+    FRawColorTransform.h   Bayer 黑/白电平、白平衡、CCM 排列/输出空间与 sRGB 输出编码，CPU/GPU 共用展开参数
+    FRawMetadata           RAW 配套 TXT 查找、按帧读取及数值校验，Bayer 排布由用户选择
     FImageFormatDesc       **格式描述表** —— 整个项目的地基，详见 formats.md
     FResolutionGuess       由文件大小 + 格式反推可能的分辨率（详见 loading.md）
     FImageData             图像数据容器（尺寸/格式/stride/位深布局/像素/只读元数据）

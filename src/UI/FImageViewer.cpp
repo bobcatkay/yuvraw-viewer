@@ -2246,6 +2246,8 @@ void FImageViewer::IssueDrawCallback(
         int32_t SwapUV;
         int32_t ChannelMode;
         int32_t BayerPattern;
+        int32_t BayerBlockSize;
+        FRawColorTransform::FContext Raw;
         int32_t TextureCount;
         bool    bIsYUV;
         bool    bIsBayer;
@@ -2296,6 +2298,8 @@ void FImageViewer::IssueDrawCallback(
     callbackData.SwapUV = formatDesc.bSwapChroma ? 1 : 0;
     callbackData.ChannelMode = static_cast<int32_t>(display.ChannelView);
     callbackData.BayerPattern = static_cast<int32_t>(Doc->GetParams().BayerPattern);
+    callbackData.BayerBlockSize = formatDesc.BayerBlockSize;
+    callbackData.Raw = FRawColorTransform::Build(display.Raw, (1 << imageData->GetSourceBitDepth()) - 1);
     callbackData.TextureCount = static_cast<int32_t>(textureData->GetTextureCount());
     callbackData.bIsYUV = (formatDesc.ColorModel == EColorModel::YUV);
     callbackData.bIsBayer = (formatDesc.ColorModel == EColorModel::Bayer);
@@ -2497,6 +2501,14 @@ void FImageViewer::IssueDrawCallback(
         if (data->bIsBayer)
         {
             shader->SetInt("uBayerPattern", data->BayerPattern);
+            shader->SetInt("uBayerBlockSize", data->BayerBlockSize);
+            const auto& raw = data->Raw;
+            shader->SetInt("uRawEnabled", raw.bEnabled ? 1 : 0);
+            shader->SetInt("uRawEncodeSrgb", raw.bEncodeSrgb ? 1 : 0);
+            shader->SetVec4("uRawBlackLevel", raw.BlackLevel[0], raw.BlackLevel[1], raw.BlackLevel[2], raw.BlackLevel[3]);
+            shader->SetVec4("uRawScale", raw.Scale[0], raw.Scale[1], raw.Scale[2], raw.Scale[3]);
+            shader->SetVec3("uRawWhiteBalance", raw.WhiteBalance[0], raw.WhiteBalance[1], raw.WhiteBalance[2]);
+            shader->SetMat3("uRawCcm", raw.Matrix.data());
         }
 
         // packed 与 Bayer 着色器都用 texelFetch 按整数坐标取样，需要知道图像尺寸

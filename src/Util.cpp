@@ -117,6 +117,13 @@ namespace
         // 长且具体的别名必须排在短名之前，尤其是 RGBA/RGB 与 Gray16/Gray。
         static const FFilenameFormatAlias kAliases[] =
         {
+            // Quad 名称必须先于普通 Bayer，避免分隔的 Quad_Bayer_10 命中短别名。
+            { "quadbayer16", EImageFormat::QuadBayer16 },
+            { "quadbayer14", EImageFormat::QuadBayer14 },
+            { "quadbayer12", EImageFormat::QuadBayer12 },
+            { "quadbayer10", EImageFormat::QuadBayer10 },
+            { "quadbayer8",  EImageFormat::QuadBayer8 },
+            { "quadbayer",   EImageFormat::QuadBayer10 },
             { "bayerpacked12", EImageFormat::BayerPacked12 },
             { "bayerraw12",    EImageFormat::BayerPacked12 },
             { "androidraw12",  EImageFormat::BayerPacked12 },
@@ -129,6 +136,7 @@ namespace
             { "bayerraw14",    EImageFormat::BayerPacked14 },
             { "androidraw14",  EImageFormat::BayerPacked14 },
             { "raw14",         EImageFormat::BayerPacked14 },
+            { "bayerraw",      EImageFormat::Bayer10 },
             { "bayer16",       EImageFormat::Bayer16 },
             { "bayer14",       EImageFormat::Bayer14 },
             { "bayer12",       EImageFormat::Bayer12 },
@@ -257,6 +265,7 @@ EImageFormat ParseImageInfoFromFilename(const std::string& FilePath, int32_t& Ou
     const std::filesystem::path path = std::filesystem::u8path(FilePath);
     const std::string fileName = path.filename().u8string();
     const std::string fileNameLower = ToLowerAscii(fileName);
+    const std::string extensionLower = ToLowerAscii(path.extension().u8string());
 
     // Try to parse resolution: WIDTHxHEIGHT or WIDTHXHEIGHT
     std::regex resolutionPattern(R"((\d+)[xX](\d+))");
@@ -283,14 +292,23 @@ EImageFormat ParseImageInfoFromFilename(const std::string& FilePath, int32_t& Ou
         }
     }
 
-    const EImageFormat parsedFormat = ParseFormatTokens(SplitFilenameTokens(fileNameLower));
+    // .raw 只表示裸数据，不能让扩展名本身命中 RAW 格式并覆盖 Bayer 默认值。
+    // 文件名中明确给出的格式仍优先，其他扩展名保留原有的格式识别规则。
+    const std::string formatName = extensionLower == ".raw" ?
+        ToLowerAscii(path.stem().u8string()) : fileNameLower;
+    const EImageFormat parsedFormat = ParseFormatTokens(SplitFilenameTokens(formatName));
 
     if (parsedFormat != EImageFormat::Unknown)
     {
         return parsedFormat;
     }
 
-    if (ToLowerAscii(path.extension().u8string()) == ".yuv" &&
+    if (extensionLower == ".raw")
+    {
+        return EImageFormat::Bayer10;
+    }
+
+    if (extensionLower == ".yuv" &&
         OutWidth > 0 &&
         OutHeight > 0)
     {

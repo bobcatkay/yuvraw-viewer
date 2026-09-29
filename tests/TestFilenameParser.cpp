@@ -66,8 +66,8 @@ int main()
     std::printf("=== 文件名格式识别 ===\n");
 
     Check(
-        "RGBA 样例不再误判 NV21",
-        "output_025_frame_115_97568024564_3840x2880_RGBA.yuv",
+        "RGBA 标识优先于 YUV 默认值",
+        "frame_3840x2880_RGBA.yuv",
         EImageFormat::RGBA8,
         3840,
         2880);
@@ -97,18 +97,34 @@ int main()
     Check("Bayer8 稳定名称", "sensor_4032x3024_Bayer8.raw", EImageFormat::Bayer8, 4032, 3024);
     Check("Bayer_14 未打包", "sensor_4032x3024_Bayer_14.raw", EImageFormat::Bayer14, 4032, 3024);
     Check("Bayer 通用名称", "sensor_4032x3024_Bayer_BGGR.raw", EImageFormat::Bayer16, 4032, 3024);
+    Check("Quad Bayer8 名称", "frame_640x480_QuadBayer8.raw", EImageFormat::QuadBayer8, 640, 480);
+    Check("Quad Bayer10 长词优先", "frame_640x480_Quad_Bayer_10.RAW", EImageFormat::QuadBayer10, 640, 480);
+    Check("Quad Bayer12 名称", "frame_640x480_QuadBayer12.raw", EImageFormat::QuadBayer12, 640, 480);
+    Check("Quad Bayer14 名称", "frame_640x480_Quad_Bayer14.raw", EImageFormat::QuadBayer14, 640, 480);
+    Check("Quad Bayer16 长词优先", "frame_640x480_Quad_Bayer_16.raw", EImageFormat::QuadBayer16, 640, 480);
+    Check("Quad Bayer 默认位深", "frame_640x480_Quad_Bayer.raw", EImageFormat::QuadBayer10, 640, 480);
+    Check("Bayer Raw 合并名称", "frame_640x480_Bayer_Raw.raw", EImageFormat::Bayer10, 640, 480);
+    Check("Quad Bayer Raw 合并名称", "frame_640x480_QuadBayerRaw.raw", EImageFormat::QuadBayer10, 640, 480);
+    Check("既有 Bayer RAW12 packed 别名", "frame_640x480_Bayer_Raw_12.raw", EImageFormat::BayerPacked12, 640, 480);
+
+    Check("无格式 RAW 回退 Bayer10", "frame_640x480.raw", EImageFormat::Bayer10, 640, 480);
+    Check("大写 RAW 扩展名回退", "frame_640x480.RAW", EImageFormat::Bayer10, 640, 480);
+    Check("无分辨率 RAW 回退", "frame.raw", EImageFormat::Bayer10, 0, 0);
+    Check("未匹配 token 的 RAW 回退", "frame_640x480_argb.raw", EImageFormat::Bayer10, 640, 480);
+    Check("显式 RAW 标识保留", "frame_640x480_RAW.raw", EImageFormat::Raw, 640, 480);
 
     Check("无格式 YUV 回退", "legacy_640x480.yuv", EImageFormat::NV21, 640, 480);
     Check("大写 YUV 扩展名回退", "legacy_640x480.YUV", EImageFormat::NV21, 640, 480);
     Check(
         "超长分辨率不会抛异常",
         "sensor_999999999999999999999x480.raw",
-        EImageFormat::Raw,
+        EImageFormat::Bayer10,
         0,
         0);
 
     std::printf("\n=== 格式参数归一化 ===\n");
     FImageLoadParams detectedParams;
+    CheckCondition("RAW 默认 BGGR 排布", detectedParams.BayerPattern == EBayerPattern::BGGR);
     detectedParams.ByteOrder = EByteOrder::BigEndian;
     detectedParams.SampleAlignment =
         ESampleAlignment::MostSignificantBits;

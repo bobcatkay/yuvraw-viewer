@@ -10,6 +10,7 @@
 
 #include "Image/FImageData.h"
 #include "Image/FImageLoadParams.h"
+#include "Image/FDisplaySettings.h"
 #include "gl/FTextureData.h"
 
 struct GLFWwindow;
@@ -84,6 +85,8 @@ struct FImageLoadResult
     FTextureLoadOptions TextureLoadOptions;
     std::string LastError;
     std::string ParameterSource;
+    std::optional<FRawDisplaySettings> RawDisplay;
+    bool bPreserveRawSettings = false;
 
     std::unique_ptr<FImageData> ImageData;
     std::unique_ptr<FTextureData> TextureData;

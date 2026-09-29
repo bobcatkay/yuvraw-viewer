@@ -125,6 +125,7 @@ $suites = @(
         Sources = @(
             (Join-Path $PSScriptRoot "TestRawImageLoader.cpp")
             (Join-Path $srcDir "Image\FRawImageLoader.cpp")
+            (Join-Path $srcDir "Image\FRawMetadata.cpp")
             (Join-Path $srcDir "Image\FImageData.cpp")
             (Join-Path $srcDir "Image\FImageFormatDesc.cpp")
             (Join-Path $srcDir "Core\FLogger.cpp")
@@ -204,6 +205,7 @@ $suites = @(
         Sources = @(
             (Join-Path $PSScriptRoot "TestImageConfigCache.cpp")
             (Join-Path $srcDir "Core\FImageConfigCache.cpp")
+            (Join-Path $srcDir "Image\FImageFormatDesc.cpp")
         )
         Libs    = ""
     },

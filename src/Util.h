@@ -56,7 +56,7 @@ void logError(const char* file, const char* func, const char* fmt, ...);
  * @param FilePath 完整文件路径
  * @param OutWidth 输出宽度，未找到时为 0
  * @param OutHeight 输出高度，未找到时为 0
- * @return 解析出的格式；只有带分辨率但没有格式标识时才回退为 NV21
+ * @return 解析出的格式；无格式标识的 .raw 默认 Bayer10，其余带分辨率的文件回退为 NV21
  */
 EImageFormat ParseImageInfoFromFilename(const std::string& FilePath, int32_t& OutWidth, int32_t& OutHeight);
 

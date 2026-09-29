@@ -117,6 +117,7 @@ YUV 类格式共用着色器，转换参数全走 uniform：
 | `uTextureOrigin0` (vec2) | 打包 YUV / Bayer 的块原点，以存储纹素计，其余默认 0 |
 | `uDrawRegion` (vec4) | 本次绘制核心块的全图 UV 矩形，普通整图/稀疏为 (0,0,1,1) |
 | `uBayerPattern` (int) | 0=RGGB 1=BGGR 2=GRBG 3=GBRG |
+| `uBayerBlockSize` (int) | 普通 Bayer 为 1，Quad Bayer 为 2；决定 CFA 颜色块与邻域步长 |
 
 矩阵由 Kr/Kb 现算而非硬编码；BT.601/709/2020 的系数已与公开标准逐位核对。
 
@@ -127,6 +128,9 @@ packed（YUY2/UYVY）与 Bayer 着色器**必须用 `texelFetch`**：线性过�
 `GetFragmentShaderForFormat()` 返回 `std::string`，内容是
 **版本声明 + 纹理坐标辅助块（`GetTextureSamplingGLSL()`） + 色彩管线前导块（`GetColorPipelineGLSL()`） + 该格式取样代码**。
 各格式的 body 因此不带 `#version`。Bayer 是唯一例外 —— 它自带完整源码且不接管线。
+其独立 RAW 校正通过 `uRawEnabled/uRawEncodeSrgb/uRawBlackLevel/uRawScale/uRawWhiteBalance/uRawCcm`
+接收 `FRawColorTransform::Build` 展开的参数；黑电平按全图 CFA 坐标应用，分块边界不重置相位。
+Quad Bayer 的黑电平按颜色块位置索引，CPU/GPU 边界钳制都保留块内位置。
 
 ## 渲染管线要点
 
